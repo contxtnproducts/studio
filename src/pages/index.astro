@@ -1,0 +1,378 @@
+---
+import Base from "../layouts/Base.astro";
+
+// Drop your Figma exports into /public/shots/ using these filenames.
+// Until then each slot renders as an empty outlined tile at the
+// designed aspect ratio, so the layout is already correct.
+const rowA = [
+  { src: "/shots/01.png", w: 298, h: 187 },
+  { src: "/shots/02.png", w: 298, h: 187 },
+  { src: "/shots/03.png", w: 130, h: 187 },
+  { src: "/shots/04.png", w:  87, h: 186 },
+  { src: "/shots/05.png", w: 298, h: 187 },
+  { src: "/shots/06.png", w: 298, h: 187 },
+];
+
+const rowB = [
+  { src: "/shots/07.png", w: 286, h: 179 },
+  { src: "/shots/08.png", w: 286, h: 179 },
+  { src: "/shots/09.png", w: 286, h: 179 },
+  { src: "/shots/10.png", w: 130, h: 187 },
+  { src: "/shots/11.png", w: 286, h: 179 },
+  { src: "/shots/12.png", w: 286, h: 179 },
+];
+
+const projects = [
+  {
+    name: "Nectar",
+    title: "An asset tracking suite to help beekeepers reduce losses and grow revenue.",
+    line: "Validating feasibility and market interest through MVP.",
+  },
+  {
+    name: "Relion",
+    title: "A maintenance platform for EV chargers, from issue detection to dispatch.",
+    line: "Leveraging UX as a differentiator after the seed round.",
+  },
+  {
+    name: "LispLogics/BIXI",
+    title: "An AI driven auto-dispatch software for large bike-sharing networks.",
+    line: "Materializing tech value through a platform.",
+  },
+];
+
+const railWords = ["B2B", "SaaS", "AgTech"];
+---
+
+<Base
+  title="Applied Context — Thomas Poblete"
+  description="Applied Context is the micro-studio of designer Thomas Poblete. Design for complex B2B SaaS products."
+>
+  <div class="frame">
+    <!-- Ruled margins -->
+    <div class="rule rule--left" aria-hidden="true"></div>
+    <div class="rule rule--right" aria-hidden="true"></div>
+
+    <!-- Right rail: display type running off the edge -->
+    <aside class="rail" aria-hidden="true">
+      {railWords.map((w, i) => (
+        <span class="rail__word" style={`--i:${i}`}>{w}</span>
+      ))}
+    </aside>
+
+    <header class="masthead">
+      <span class="masthead__mark">
+        <span class="dot" aria-hidden="true"></span>APPLIED CONTEXT
+      </span>
+      <nav class="masthead__nav">
+        Product Discovery <span class="sep">•</span> Product design
+        <span class="sep">•</span> Design leadership
+      </nav>
+    </header>
+
+    <main>
+      <!-- Hero -->
+      <section class="hero">
+        <h1 class="hero__claim">Design for complex B2B SaaS products.</h1>
+        <p class="hero__body">
+          Applied Context is the micro-studio of designer
+          <span class="em">Thomas Poblete</span>.
+        </p>
+        <p class="hero__body">
+          I support tech organizations across Product Discovery,
+          Product Design, and Design Leadership.
+        </p>
+      </section>
+
+      <!-- Marquee -->
+      <section class="marquee" aria-label="Selected work">
+        <div class="marquee__row">
+          <div class="marquee__track">
+            {[0, 1].map(() => (
+              <div class="marquee__set">
+                {rowA.map((t) => (
+                  <span class="tile" style={`--w:${t.w};--h:${t.h}`}>
+                    <img src={t.src} alt="" loading="lazy" onerror="this.remove()" />
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div class="marquee__row">
+          <div class="marquee__track marquee__track--rev">
+            {[0, 1].map(() => (
+              <div class="marquee__set">
+                {rowB.map((t) => (
+                  <span class="tile" style={`--w:${t.w};--h:${t.h}`}>
+                    <img src={t.src} alt="" loading="lazy" onerror="this.remove()" />
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <!-- Projects -->
+      <section class="projects">
+        <span class="dot dot--anchor" aria-hidden="true"></span>
+        <ul>
+          {projects.map((p) => (
+            <li class="project">
+              <h2 class="project__title">
+                <span class="em">{p.name}</span> — {p.title}
+              </h2>
+              <p class="project__line">{p.line}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </main>
+
+    <footer class="contact">
+      <span class="contact__lead">Let's chat</span>
+      <a href="#">Calendly</a>
+      <a href="https://www.linkedin.com/">LinkedIn</a>
+      <a href="mailto:thomas.pob@gmail.com">Email</a>
+    </footer>
+  </div>
+</Base>
+
+<style>
+  .frame {
+    position: relative;
+    max-width: var(--frame);
+    margin: 0 auto;
+    background: var(--paper);
+    overflow: hidden;
+  }
+
+  /* --- Ruled margins ------------------------------------------- */
+  .rule {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--accent);
+    z-index: 3;
+  }
+  .rule--left  { left: var(--rule-left); }
+  .rule--right { right: calc(var(--frame) - var(--rule-right)); }
+
+  .frame::before,
+  .frame::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--margin);
+    z-index: 2;
+  }
+  .frame::before { left: 0; width: var(--rule-left); }
+  .frame::after {
+    right: 0;
+    width: calc(var(--frame) - var(--rule-right));
+  }
+
+  /* --- Right rail display type --------------------------------- */
+  .rail {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: calc(var(--frame) - var(--rule-right));
+    height: 100%;
+    z-index: 3;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .rail__word {
+    position: absolute;
+    left: 24px;
+    top: calc(190px + var(--i) * 470px);
+    font-family: var(--face-display);
+    font-weight: 700;
+    font-size: var(--size-rail);
+    line-height: 1.1;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  /* --- Masthead ------------------------------------------------- */
+  .masthead {
+    position: relative;
+    z-index: 4;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--gutter);
+    padding: 100px var(--gutter) 0 var(--col-start);
+    font-family: var(--face-mono);
+    font-weight: 700;
+    font-size: var(--size-nav);
+    letter-spacing: -0.01em;
+  }
+  .masthead__nav { text-align: right; }
+  .sep { font-weight: 400; }
+
+  .dot {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin-right: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    vertical-align: -2px;
+  }
+
+  /* --- Hero ----------------------------------------------------- */
+  .hero {
+    position: relative;
+    z-index: 4;
+    padding: 240px var(--gutter) 0 var(--col-start);
+    max-width: 930px;
+    font-size: var(--size-hero);
+    font-weight: 500;
+    line-height: var(--leading-hero);
+    letter-spacing: var(--track-hero);
+  }
+  .hero__claim {
+    font-size: inherit;
+    font-weight: 500;
+    color: var(--accent);
+    max-width: 20ch;
+    margin-bottom: 16px;
+  }
+  .hero__body { max-width: 26ch; margin-bottom: 16px; }
+  .hero__body:last-child { margin-bottom: 0; }
+  .em { color: var(--accent); }
+
+  /* --- Marquee -------------------------------------------------- */
+  .marquee {
+    position: relative;
+    z-index: 1;
+    margin-top: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  .marquee__row { overflow: hidden; }
+  .marquee__track {
+    display: flex;
+    width: max-content;
+    animation: slide 60s linear infinite;
+  }
+  .marquee__track--rev {
+    animation-direction: reverse;
+    animation-duration: 75s;
+  }
+  .marquee__set {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    padding-right: 32px;
+  }
+
+  @keyframes slide {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  .tile {
+    flex: none;
+    display: block;
+    width: calc(var(--w) * 1px);
+    aspect-ratio: var(--w) / var(--h);
+    border-radius: 4px;
+    background: var(--paper);
+    border: 1px solid var(--tile-edge);
+    box-shadow: var(--shadow-tile);
+    overflow: hidden;
+  }
+  .tile img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* --- Projects -------------------------------------------------- */
+  .projects {
+    position: relative;
+    z-index: 4;
+    padding: 180px var(--gutter) 0 var(--col-start);
+  }
+  .dot--anchor {
+    position: absolute;
+    left: 33px;
+    top: 186px;
+    margin: 0;
+  }
+  .projects ul {
+    display: flex;
+    flex-direction: column;
+    gap: 64px;
+    max-width: 900px;
+  }
+  .project__title {
+    font-size: var(--size-project);
+    font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: var(--track-project);
+    margin-bottom: 24px;
+  }
+  .project__line {
+    font-family: var(--face-mono);
+    font-size: var(--size-sub);
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+  }
+
+  /* --- Contact --------------------------------------------------- */
+  .contact {
+    position: relative;
+    z-index: 5;
+    margin-top: 220px;
+    min-height: 80px;
+    background: var(--accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 32px;
+    padding: 16px 32px;
+    font-size: var(--size-sub);
+  }
+  .contact__lead { font-weight: 600; }
+  .contact a { border-bottom: 1px solid transparent; }
+  .contact a:hover { border-bottom-color: #fff; }
+
+  /* --- Narrow ----------------------------------------------------- */
+  @media (max-width: 900px) {
+    .frame::before, .frame::after,
+    .rule, .rail { display: none; }
+
+    .masthead {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 40px var(--gutter) 0;
+    }
+    .masthead__nav { text-align: left; }
+
+    .hero     { padding: 80px var(--gutter) 0; max-width: none; }
+    .hero__claim, .hero__body { max-width: 22ch; }
+
+    .marquee  { margin-top: 80px; }
+    .projects { padding: 90px var(--gutter) 0; }
+    .dot--anchor { display: none; }
+    .projects ul { gap: 48px; }
+
+    .contact {
+      margin-top: 100px;
+      justify-content: flex-start;
+      gap: 20px;
+    }
+  }
+</style>
