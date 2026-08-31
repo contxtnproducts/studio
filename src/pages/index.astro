@@ -1800,48 +1800,34 @@ const testimonials = [
   }
 
   /* --- Spread layout (experiment) ---------------------------------
-     A story with layout: "spread" runs its body into magazine columns
-     the panel scrolls SIDEWAYS through, instead of a tall single
-     column scrolled down. Only the modal gets this — the standalone
-     /stories/ page stays a normal article. */
-  #story-modal:has(.story-modal__body--spread:not([hidden])) {
-    overflow: hidden;
-  }
-  .story-modal__scroll:has(.story-modal__body--spread:not([hidden])) {
-    max-width: none;
-    height: 100%;
-    padding: 72px var(--strip);
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
-  }
+     A story with layout: "spread" keeps the normal content width and
+     vertical scroll, but sets the body in two balanced columns. Title,
+     attributes, full-width images and the pull-quote span both. Only
+     the modal — the standalone /stories/ page stays a plain article. */
   .story-modal__body--spread {
-    height: 100%;
-    column-width: 21rem;
-    column-gap: 4rem;
-    column-fill: auto;
+    column-count: 2;
+    column-gap: 3rem;
     column-rule: 1px solid var(--grey-1);
+    font-size: 16px;
+    line-height: 1.5;
   }
-  /* keep each block whole across a column break; keep a heading with
-     whatever follows it so it never sits alone at a column bottom */
+  /* keep each block whole across a column break; keep a heading glued
+     to whatever follows it */
   .story-modal__body--spread > * {
     break-inside: avoid;
   }
   .story-modal__body--spread .story-modal__heading {
     break-after: avoid;
   }
-  /* title + attributes sit in the first column with the rest of the
-     body — running them full-width left a big empty band up top */
-  .story-modal__body--spread .story-modal__title {
-    font-size: 22px;
-    line-height: 1.25;
-    margin-bottom: 20px;
+  /* span both columns */
+  .story-modal__body--spread .story-modal__title,
+  .story-modal__body--spread .story-modal__attrs,
+  .story-modal__body--spread .story-modal__image--full,
+  .story-modal__body--spread .story-modal__quote {
+    column-span: all;
   }
-  .story-modal__body--spread .story-modal__attrs {
-    margin-bottom: 32px;
-  }
-  /* 16px body text; neutralise the single-column measure caps and
-     full-bleed breakouts that fight the column box */
+  /* neutralise the single-column measure caps and the full-bleed
+     breakout margins — they fight the column box */
   .story-modal__body--spread .story-modal__p,
   .story-modal__body--spread .story-modal__heading,
   .story-modal__body--spread .story-modal__list {
@@ -1849,36 +1835,19 @@ const testimonials = [
     font-size: 16px;
     line-height: 1.5;
   }
-  .story-modal__body--spread .story-modal__image,
   .story-modal__body--spread .story-modal__image--full,
   .story-modal__body--spread .story-modal__quote {
     width: auto;
     margin-left: 0;
     margin-right: 0;
   }
-  .story-modal__body--spread .story-modal__image img,
-  .story-modal__body--spread .story-modal__image--enclosed img {
+  .story-modal__body--spread .story-modal__image img {
     width: 100%;
     max-width: none;
   }
-  .story-modal__body--spread .story-modal__quote-text {
-    max-width: none;
-    padding: 32px 0;
-    font-size: 20px;
-  }
-  /* Phone — columns don't fit; fall back to one column scrolled down. */
-  @media (max-width: 900px) {
-    #story-modal:has(.story-modal__body--spread:not([hidden])) {
-      overflow-y: auto;
-    }
-    .story-modal__scroll:has(.story-modal__body--spread:not([hidden])) {
-      height: auto;
-      overflow-x: hidden;
-      padding: 96px 32px 48px;
-    }
+  /* Phone — one column. */
+  @media (max-width: 700px) {
     .story-modal__body--spread {
-      height: auto;
-      column-width: auto;
       column-count: 1;
     }
   }
