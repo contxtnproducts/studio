@@ -639,12 +639,10 @@ const testimonials = [
                         <figure
                           class={`story-modal__cell${img.span === 12 ? " story-modal__cell--full" : ""}${img.bare ? " story-modal__cell--bare" : ""}`}
                           style={`--span: ${img.span};${img.bg ? ` --cell-bg: ${img.bg};` : ""}`}
-                          data-cell-tip={img.label}
                         >
                           <img src={img.file} alt={img.label} loading="lazy" />
                         </figure>
                       ))}
-                      <span class="story-modal__cell-tip"></span>
                     </div>
                   )}
                 </section>
@@ -820,10 +818,9 @@ const testimonials = [
       });
     })();
 
-    // "Soon" caption position — same recipe as the mockup gallery's
-    // .story-modal__cell-tip: --tip-x/--tip-y are the cursor's position
-    // relative to the row's own top-left corner (the row is the
-    // position:relative anchor, see its CSS), read by the caption's
+    // "Soon" caption position — --tip-x/--tip-y are the cursor's
+    // position relative to the row's own top-left corner (the row is
+    // the position:relative anchor, see its CSS), read by the caption's
     // transform via calc(). Visibility itself is plain CSS (:hover),
     // this only ever needs to move the caption while it's shown.
     document.querySelectorAll('.table__row[data-dim="true"]').forEach((row) => {
@@ -1236,35 +1233,6 @@ const testimonials = [
             }
           });
         }
-      });
-      // Gallery hover caption: one shared tooltip per gallery (see
-      // .story-modal__cell-tip) that tracks the cursor rather than a
-      // per-cell one, specifically so it stays visible moving from one
-      // mockup to the next. mouseenter/mouseleave don't bubble and
-      // don't re-fire for moves between a container's own children —
-      // only entering/leaving the gallery itself toggles .is-visible —
-      // which is what keeps it up crossing the gaps between cells.
-      // --tip-x/--tip-y are the cursor's position relative to the
-      // gallery's own top-left corner; the CSS transform adds the
-      // +16px lead so the tip trails just past the pointer. Text swaps
-      // per cell via delegated mouseover (which does bubble) reading
-      // each cell's own data-cell-tip — crossing a gap between cells
-      // just leaves the last cell's text up until the next one is
-      // entered, same "stays up" behavior as the position tracking.
-      modal.querySelectorAll(".story-modal__gallery").forEach((gallery) => {
-        const tip = gallery.querySelector(".story-modal__cell-tip");
-        if (!tip) return;
-        gallery.addEventListener("mouseenter", () => tip.classList.add("is-visible"));
-        gallery.addEventListener("mouseleave", () => tip.classList.remove("is-visible"));
-        gallery.addEventListener("mousemove", (e) => {
-          const rect = gallery.getBoundingClientRect();
-          gallery.style.setProperty("--tip-x", `${e.clientX - rect.left}px`);
-          gallery.style.setProperty("--tip-y", `${e.clientY - rect.top}px`);
-        });
-        gallery.addEventListener("mouseover", (e) => {
-          const cell = e.target.closest(".story-modal__cell");
-          if (cell) tip.textContent = cell.dataset.cellTip || "";
-        });
       });
       // Not modal.querySelectorAll — #story-peek and #story-actions-close
       // live outside #story-modal (see the markup comment for why).
@@ -2038,35 +2006,6 @@ const testimonials = [
   .story-modal__cell--bare img {
     border-radius: 0;
   }
-  /* Hover caption — same fade interaction as .story-actions__tip (the
-     rail's "Next story [→]" etc. tooltips): mono face, fast opacity
-     transition. One shared element per gallery rather than one per
-     cell — visibility is toggled by .is-visible (set on the gallery's
-     own mouseenter/mouseleave, see the script below), not per-cell
-     :hover, specifically so moving from one mockup to the next doesn't
-     flicker it off crossing the gap between cells: mouseenter/
-     mouseleave don't fire again for moves between a container's own
-     children, only for entering/leaving the container itself. Position
-     tracks the cursor via --tip-x/--tip-y (also set on mousemove) with
-     a +16px lead so it trails just past the pointer. Text swaps per
-     cell (see the mouseover handler below), reading each cell's
-     data-cell-tip — the <title> slug from the filename. */
-  .story-modal__cell-tip {
-    position: absolute;
-    left: 0;
-    top: 0;
-    max-width: 260px;
-    font-family: var(--face-mono);
-    font-size: var(--size-mast);
-    line-height: var(--leading-mast);
-    letter-spacing: var(--track-mast);
-    color: var(--black);
-    opacity: 0;
-    pointer-events: none;
-    transform: translate(calc(var(--tip-x, 0px) + 16px), calc(var(--tip-y, 0px) + 16px));
-    transition: opacity 160ms ease;
-  }
-  .story-modal__cell-tip.is-visible { opacity: 1; }
 
   /* --- Masthead ------------------------------------------------- */
   /* Not sticky — scrolls away with the rest of the page. */
@@ -2318,11 +2257,11 @@ const testimonials = [
   .table__row--dim .table__title {
     opacity: 0.3;
   }
-  /* "Soon" — cursor-anchored caption, same recipe as .story-modal__
-     cell-tip: mono face, size-mast, fast opacity transition, position
-     tracks the cursor via --tip-x/--tip-y (row-relative, set on
-     mousemove — see the script) with the same +16px lead so it trails
-     just past the pointer. Black, not --main — this isn't a link/
+  /* "Soon" — cursor-anchored caption: mono face, size-mast, fast
+     opacity transition, position tracks the cursor via --tip-x/--tip-y
+     (row-relative, set on mousemove — see the script) with a +16px
+     lead so it trails just past the pointer. Black, not --main — this
+     isn't a link/
      action, just a status label. The row underneath has no click/hover
      treatment of its own (see above), so this is the only feedback
      hovering an inactive row gives. */
