@@ -1830,21 +1830,24 @@ const testimonials = [
   .story-modal__body--spread .story-modal__heading {
     break-after: avoid;
   }
-  /* title runs full width as a masthead above the columns */
+  /* title + attributes sit in the first column with the rest of the
+     body — running them full-width left a big empty band up top */
   .story-modal__body--spread .story-modal__title {
-    column-span: all;
-    margin-bottom: 24px;
+    font-size: 22px;
+    line-height: 1.25;
+    margin-bottom: 20px;
   }
   .story-modal__body--spread .story-modal__attrs {
-    column-span: all;
-    margin-bottom: 40px;
+    margin-bottom: 32px;
   }
-  /* neutralise the single-column measure caps and full-bleed breakouts
-     — they fight the column box */
+  /* 16px body text; neutralise the single-column measure caps and
+     full-bleed breakouts that fight the column box */
   .story-modal__body--spread .story-modal__p,
   .story-modal__body--spread .story-modal__heading,
   .story-modal__body--spread .story-modal__list {
     max-width: none;
+    font-size: 16px;
+    line-height: 1.5;
   }
   .story-modal__body--spread .story-modal__image,
   .story-modal__body--spread .story-modal__image--full,
