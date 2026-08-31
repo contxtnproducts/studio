@@ -59,27 +59,18 @@ function mockupsGallery() {
   } catch {
     return [];
   }
-  // A hand-drawn caption is its own transparent PNG named
-  // <order>-caption.png — exported from Figma, overlaid on the cell at
-  // a fixed size (see .story-modal__note), so it never scales with the
-  // grid.
-  const captions = new Set(
-    files.filter((f) => /^(\d+)-caption\.png$/i.test(f)).map((f) => f.match(/^(\d+)/)[1])
-  );
   return files
     .map((f) => {
       const m = f.match(GALLERY_FILE_RE);
       if (!m) return null;
       const mat = m[3] ? m[3].toLowerCase() : null;
-      const order = Number(m[1]);
       return {
         file: `/shots/mockups/${f}`,
-        order,
+        order: Number(m[1]),
         span: GALLERY_SPAN[m[2].toLowerCase()],
         bg: mat && mat !== "none" ? `#${mat}` : null,
         bare: mat === "none",
         label: m[4].replace(/[-_]+/g, " ").trim(),
-        caption: captions.has(m[1]) ? `/shots/mockups/${m[1]}-caption.png` : null,
       };
     })
     .filter((x) => x !== null)
@@ -650,7 +641,6 @@ const testimonials = [
                           style={`--span: ${img.span};${img.bg ? ` --cell-bg: ${img.bg};` : ""}`}
                         >
                           <img src={img.file} alt={img.label} loading="lazy" />
-                          {img.caption && <img class="story-modal__note" src={img.caption} alt="" loading="lazy" />}
                         </figure>
                       ))}
                     </div>
@@ -1995,7 +1985,6 @@ const testimonials = [
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
     background: var(--cell-bg, #ededed);
     border-radius: 6px;
   }
@@ -2011,23 +2000,6 @@ const testimonials = [
     width: auto;
     height: auto;
     border-radius: 3px;
-  }
-  /* Hand-drawn caption — its own transparent PNG (<order>-caption.png,
-     exported from Figma), overlaid near the cell's bottom-left. Shown
-     at its natural size and NOT tied to the grid: same physical size
-     whatever slot the image landed in. No tilt, no effects. The px
-     max-width is the real cap (so it's effectively fixed); the % only
-     rescues a stacked mobile cell. */
-  .story-modal__note {
-    position: absolute;
-    left: 3%;
-    bottom: 7%;
-    width: auto;
-    height: auto;
-    max-width: min(240px, 92%);
-    max-height: none;
-    border-radius: 0;
-    pointer-events: none;
   }
   /* `none` in the filename — transparent PNG: drop the mat and the
      rounded corners so the image reads as a cut-out on the panel. */
