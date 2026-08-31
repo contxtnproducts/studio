@@ -32,22 +32,24 @@ function photosFor(slug) {
 // Grid for the "visual archive" (opened by "A messier visual archive of
 // my work"). Drop image files into public/shots/mockups/ named:
 //
-//     <order>-<size>[-<hex>]-<title>.<ext>
+//     <order>-<size>[-<mat>]-<title>.<ext>
 //
 //   order   digits — controls the sequence          01, 2, 10, …
 //   size    sm | md | lg | full — width of the cell  ⅓ · ½ · ⅔ · full
-//   hex     OPTIONAL 6 hex digits — the cell's mat   e9e9e9, bbc5bb, …
-//           colour behind the image; omit for the default light grey
+//   mat     OPTIONAL — 6 hex digits set the mat      e9e9e9, bbc5bb, …
+//           colour behind the image; the word `none` drops the mat
+//           entirely (for a transparent PNG — image sits on the panel
+//           with no box or frame); omit for the default light grey
 //   title   free text; dashes/underscores → spaces   shown on hover / as alt
 //   ext     png | jpg | jpeg | webp | gif | avif
 //
-//   e.g.  01-full-e9e9e9-fleetflash-board.png  ·  06-sm-bixi-map.png
+//   e.g.  01-full-e9e9e9-fleetflash-board.png  ·  06-sm-none-nectar-logo.png
 //
 // Each image sits inset on its mat, keeping its own aspect ratio; the
 // grid backfills gaps (auto-flow: dense). Adding, removing, resizing,
 // recolouring or reordering is just the filenames — no code change.
 const MOCKUPS_GALLERY_DIR = fileURLToPath(new URL("../../public/shots/mockups/", import.meta.url));
-const GALLERY_FILE_RE = /^(\d+)-(sm|md|lg|full)(?:-([0-9a-f]{6}))?-(.+)\.(png|jpe?g|webp|gif|avif)$/i;
+const GALLERY_FILE_RE = /^(\d+)-(sm|md|lg|full)(?:-([0-9a-f]{6}|none))?-(.+)\.(png|jpe?g|webp|gif|avif)$/i;
 const GALLERY_SPAN = { sm: 4, md: 6, lg: 8, full: 12 }; // columns of a 12-col grid
 
 function mockupsGallery() {
@@ -61,11 +63,13 @@ function mockupsGallery() {
     .map((f) => {
       const m = f.match(GALLERY_FILE_RE);
       if (!m) return null;
+      const mat = m[3] ? m[3].toLowerCase() : null;
       return {
         file: `/shots/mockups/${f}`,
         order: Number(m[1]),
         span: GALLERY_SPAN[m[2].toLowerCase()],
-        bg: m[3] ? `#${m[3]}` : null,
+        bg: mat && mat !== "none" ? `#${mat}` : null,
+        bare: mat === "none",
         label: m[4].replace(/[-_]+/g, " ").trim(),
       };
     })
@@ -633,7 +637,7 @@ const testimonials = [
                     <div class="story-modal__gallery">
                       {sec.images.map((img) => (
                         <figure
-                          class={`story-modal__cell${img.span === 12 ? " story-modal__cell--full" : ""}`}
+                          class={`story-modal__cell${img.span === 12 ? " story-modal__cell--full" : ""}${img.bare ? " story-modal__cell--bare" : ""}`}
                           style={`--span: ${img.span};${img.bg ? ` --cell-bg: ${img.bg};` : ""}`}
                           data-cell-tip={img.label}
                         >
@@ -2016,10 +2020,8 @@ const testimonials = [
     background: var(--cell-bg, #ededed);
     border-radius: 6px;
   }
-  .story-modal__cell--full {
-    min-height: 0;
-    padding: clamp(24px, 5%, 64px);
-  }
+  /* full: no square floor (natural-proportion banner); same 15% inset. */
+  .story-modal__cell--full { min-height: 0; }
   .story-modal__cell img {
     display: block;
     max-width: 100%;
@@ -2027,8 +2029,16 @@ const testimonials = [
     width: auto;
     height: auto;
     border-radius: 3px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.07),
-                0 16px 40px -16px rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  /* `none` in the filename — transparent PNG: drop the mat and the
+     frame so the image reads as a cut-out on the panel. */
+  .story-modal__cell--bare {
+    background: none;
+  }
+  .story-modal__cell--bare img {
+    border: 0;
+    border-radius: 0;
   }
   /* Hover caption — same fade interaction as .story-actions__tip (the
      rail's "Next story [→]" etc. tooltips): mono face, fast opacity
