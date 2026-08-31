@@ -11,11 +11,6 @@ context: "Operations console for distributed field teams"
 stage: "Series A, scaling the second product"
 tags: ["0→1", "Operations", "Offline-first", "Multi-role"]
 blocks:
-  - type: image
-    src: "/shots/stories/nectar-hero.png"
-    alt: "Placeholder hero — two field workers checking a device outdoors."
-    variant: enclosed
-
   - type: heading
     text: "The setup"
   - type: paragraph
@@ -24,15 +19,14 @@ blocks:
     text: "So the second product started from the opposite constraints. Small screens held in gloves. Signal that comes and goes. Three or four people touching the same job across a week. And a back office that needs the data clean enough to bill against."
   - type: paragraph
     text: "Placeholder. This is the kind of paragraph that exists mostly to give the column layout something to chew on, so ignore the specifics. What mattered was that the console had to be legible in a hurry and forgiving of a dropped connection."
-
   - type: heading
     text: "What we heard on ride-alongs"
   - type: list
     items:
-      - "➺ The phone is the primary device. The laptop is where mistakes get corrected later."
-      - "➺ Nobody reads a screen for more than a few seconds between tasks."
-      - "➺ 'Done' is a lie until someone at the office confirms it."
-      - "➺ The same site gets visited by different people with different reasons."
+      - "The phone is the primary device. The laptop is where mistakes get corrected later."
+      - "Nobody reads a screen for more than a few seconds between tasks."
+      - "'Done' is a lie until someone at the office confirms it."
+      - "The same site gets visited by different people with different reasons."
   - type: paragraph
     text: "Placeholder. Each of those turned into a design principle, and each principle killed a feature someone on the team was attached to. That is usually how you know discovery worked."
 
@@ -47,10 +41,10 @@ blocks:
     text: "Everything the field app writes is queued locally and reconciled when it can. Conflicts don't block — they surface as a thing the office resolves, with both versions intact. The field never sees a spinner it can't walk away from."
   - type: list
     items:
-      - "➺ Jobs are shared objects, not assignments — anyone with access can advance one."
-      - "➺ Every change is attributed and reversible; the timeline is the source of truth."
-      - "➺ Sync is best-effort and visible: you always know what has and hasn't left the device."
-      - "➺ The office view and the field view are the same data, different density."
+      - "Jobs are shared objects, not assignments — anyone with access can advance one."
+      - "Every change is attributed and reversible; the timeline is the source of truth."
+      - "Sync is best-effort and visible: you always know what has and hasn't left the device."
+      - "The office view and the field view are the same data, different density."
 
   - type: image
     src: "/shots/stories/relion-org-model/image-70-full.png"
@@ -63,14 +57,14 @@ blocks:
   - type: paragraph
     text: "Placeholder. Adoption in the field was the easy metric — people used it because the old workflow was worse. The number the business cared about was how much data made it to billing without a human touching it, and that went from roughly half to the high nineties over two quarters."
   - type: paragraph
-    text: "Placeholder. This section is padding so the spread has a comfortable amount of content to run into a third and fourth column. Feel free to delete all of it."
+    text: "Placeholder. This paragraph is here so the section above the break has enough body to balance across two columns. Delete it when the real copy lands."
 
   - type: break
 
   - type: heading
     text: "A few more screens"
   - type: paragraph
-    text: "Shaped by the primitives above."
+    text: "Placeholder. Everything below the break starts a fresh section — its own pair of balanced columns, with a hairline rule above it."
   - type: image
     src: "/shots/stories/relion-org-model/image-71-full.png"
     alt: "Placeholder — settings screen."

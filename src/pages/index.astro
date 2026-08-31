@@ -152,6 +152,39 @@ const detailStories = [
   ...moreDetails,
 ];
 
+// A "spread" story renders as a vertical stack of sections rather than
+// one big multi-column block: "columns" sections hold text set in two
+// balanced columns; "full" sections hold a single full-width thing (a
+// `full`/`bleed` image, or a quote). A manual `break` block ends the
+// current section and starts a fresh one, and a `full`/`bleed` image
+// or a quote is always its own section — in the stated content model
+// each of those *is* a section. (`break-before: column` was the first
+// attempt; in a fixed-width two-column container it just spills into
+// off-screen overflow columns instead of starting the next column.)
+function splitSpreadSections(blocks) {
+  const sections = [];
+  let run = [];
+  const flushRun = () => {
+    if (run.length) sections.push({ kind: "columns", blocks: run });
+    run = [];
+  };
+  for (const block of blocks) {
+    if (block.type === "break") {
+      flushRun();
+    } else if (
+      block.type === "quote" ||
+      (block.type === "image" && block.variant !== "enclosed")
+    ) {
+      flushRun();
+      sections.push({ kind: "full", blocks: [block] });
+    } else {
+      run.push(block);
+    }
+  }
+  flushRun();
+  return sections;
+}
+
 // "about" — career history. badge: the "[Consultant]" mono tag before
 // the role, only on engagements that were one (null elsewhere). org
 // keeps its own url — Figma shows BIXI as plain underlined text with
@@ -578,50 +611,59 @@ const testimonials = [
       {detailStories.map((s) => (
         <article class={`story-modal__body${s.story ? (s.story.layout === "spread" ? " story-modal__body--spread" : "") : " story-modal__body--gallery"}`} data-story={s.slug} hidden>
           {s.story ? (
-            <>
-              <p class="story-modal__title" id={`story-modal-heading-${s.slug}`}>{s.story.title}</p>
-              {s.story.attributes.length > 0 && (
-                <dl class="story-modal__attrs">
-                  {s.story.attributes.map(([label, value]) => (
-                    <div class="story-modal__attr">
-                      <dt>{label}</dt>
-                      <dd>{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
-              {s.story.blocks.map((block) => {
-                switch (block.type) {
-                  case "heading":
-                    return <p class="story-modal__heading em">{block.text}</p>;
-                  case "paragraph":
-                    return <p class="story-modal__p">{block.text}</p>;
-                  case "list":
-                    return (
-                      <ul class="story-modal__list">
-                        {block.items.map((item) => <li>{item}</li>)}
-                      </ul>
-                    );
-                  case "quote":
-                    return (
-                      <div class="story-modal__quote">
-                        <p class="story-modal__quote-text">{block.text}</p>
-                      </div>
-                    );
-                  case "image":
-                    return (
-                      <div class={`story-modal__image story-modal__image--${block.variant}`}>
-                        <img src={block.src} alt={block.alt} loading="lazy" />
-                        {block.caption && <p class="story-modal__caption">{block.caption}</p>}
-                      </div>
-                    );
-                  case "break":
-                    return <div class="story-modal__break" aria-hidden="true" />;
-                  default:
-                    return null;
-                }
-              })}
-            </>
+            (s.story.layout === "spread"
+              ? splitSpreadSections(s.story.blocks)
+              : [{ kind: "columns", blocks: s.story.blocks }]
+            ).map((group, groupIndex) => (
+              <div
+                class={`story-modal__section-group${group.kind === "full" ? " story-modal__section-group--full" : ""}`}
+              >
+                {groupIndex === 0 && (
+                  <>
+                    <p class="story-modal__title" id={`story-modal-heading-${s.slug}`}>{s.story.title}</p>
+                    {s.story.attributes.length > 0 && (
+                      <dl class="story-modal__attrs">
+                        {s.story.attributes.map(([label, value]) => (
+                          <div class="story-modal__attr">
+                            <dt>{label}</dt>
+                            <dd>{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </>
+                )}
+                {group.blocks.map((block) => {
+                  switch (block.type) {
+                    case "heading":
+                      return <p class="story-modal__heading em">{block.text}</p>;
+                    case "paragraph":
+                      return <p class="story-modal__p">{block.text}</p>;
+                    case "list":
+                      return (
+                        <ul class="story-modal__list">
+                          {block.items.map((item) => <li>{item}</li>)}
+                        </ul>
+                      );
+                    case "quote":
+                      return (
+                        <div class="story-modal__quote">
+                          <p class="story-modal__quote-text">{block.text}</p>
+                        </div>
+                      );
+                    case "image":
+                      return (
+                        <div class={`story-modal__image story-modal__image--${block.variant}`}>
+                          <img src={block.src} alt={block.alt} loading="lazy" />
+                          {block.caption && <p class="story-modal__caption">{block.caption}</p>}
+                        </div>
+                      );
+                    default:
+                      return null;
+                  }
+                })}
+              </div>
+            ))
           ) : (
             <>
               {s.detail.headline && (
@@ -1802,27 +1844,44 @@ const testimonials = [
   }
 
   /* --- Spread layout (experiment) ---------------------------------
-     A story with layout: "spread" keeps the normal content width and
-     vertical scroll, and sets the body in two balanced columns.
+     A story with layout: "spread" renders at the normal content width
+     as a vertical stack of sections (see splitSpreadSections() in the
+     frontmatter):
 
-       column content : H1 + attributes (first section only), H2,
-                        paragraph, list, enclosed image
-       full-width section : `full` image (spans the two columns),
-                            `bleed` image (spans + past the edges),
-                            quote (centred)
-       `break` block  : forces what follows into the next column
+       "columns" section : text — H2, paragraph, list, enclosed image
+                           — set in two balanced columns.
+       "full" section    : one full-width thing on its own — a `full`
+                           image (content width), a `bleed` image
+                           (past the edges), or a quote (centred).
 
-     Only the modal — the standalone /stories/ page stays a plain
+     A manual `break` block ends a section and starts the next; a
+     `full`/`bleed` image or a quote is always its own section. Only
+     the modal does this — the standalone /stories/ page stays a
      single-column article. */
-  .story-modal__body--spread {
+
+  /* The section wrapper is layout-transparent everywhere except the
+     spread, so the flow layout is unaffected by the extra element. */
+  .story-modal__section-group { display: contents; }
+
+  .story-modal__body--spread .story-modal__section-group { display: block; }
+  .story-modal__body--spread
+    .story-modal__section-group:not(.story-modal__section-group--full) {
     column-count: 2;
     column-gap: 3rem;
     column-rule: 1px solid var(--grey-1);
   }
-  /* keep each block whole across a column break; keep a heading glued
-     to whatever follows it. Lists behave like paragraphs — they may
-     break across a column, but not mid-item. */
-  .story-modal__body--spread > * {
+  /* Space + hairline between consecutive sections. */
+  .story-modal__body--spread
+    .story-modal__section-group
+    + .story-modal__section-group {
+    margin-top: 2.75rem;
+    padding-top: 2.75rem;
+    border-top: 1px solid var(--grey-1);
+  }
+  /* Keep each block whole across a column break; keep a heading glued
+     to whatever follows it. Lists may break between items, not within
+     one. */
+  .story-modal__body--spread .story-modal__section-group > * {
     break-inside: avoid;
   }
   .story-modal__body--spread .story-modal__heading {
@@ -1834,11 +1893,7 @@ const testimonials = [
   .story-modal__body--spread .story-modal__list li {
     break-inside: avoid;
   }
-  /* manual column break */
-  .story-modal__break {
-    break-before: column;
-  }
-  /* title + attributes sit in column one, trimmed to fit it */
+  /* title + attributes lead the first section, trimmed to a column */
   .story-modal__body--spread .story-modal__title {
     font-size: 22px;
     line-height: 1.25;
@@ -1846,12 +1901,6 @@ const testimonials = [
   }
   .story-modal__body--spread .story-modal__attrs {
     margin-bottom: 28px;
-  }
-  /* full-width sections span both columns (which also breaks the flow) */
-  .story-modal__body--spread .story-modal__image--full,
-  .story-modal__body--spread .story-modal__image--bleed,
-  .story-modal__body--spread .story-modal__quote {
-    column-span: all;
   }
   /* neutralise the single-column measure caps */
   .story-modal__body--spread .story-modal__p,
@@ -1883,13 +1932,14 @@ const testimonials = [
   .story-modal__body--spread .story-modal__quote-text {
     max-width: 34rem;
     margin: 0 auto;
-    padding: 44px 0;
+    padding: 8px 0;
     text-align: center;
     font-size: 26px;
   }
-  /* Phone — one column. */
+  /* Phone — everything in one column. */
   @media (max-width: 700px) {
-    .story-modal__body--spread {
+    .story-modal__body--spread
+      .story-modal__section-group:not(.story-modal__section-group--full) {
       column-count: 1;
     }
   }

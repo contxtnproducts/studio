@@ -25,15 +25,18 @@ const block = z.discriminatedUnion('type', [
     type: z.literal('image'),
     src: z.string(),
     alt: z.string(),
-    // enclosed = sits in the column flow; full = spans both columns at
-    // content width; bleed = spans and pushes past the content edges.
-    // (Outside the spread layout, full and bleed look the same.)
+    // enclosed = sits in the column flow; full = its own full-width
+    // section at content width; bleed = its own section, pushed past
+    // the content edges. In the spread layout full/bleed each become a
+    // standalone section (which also ends the two-column run before
+    // them); outside it, full and bleed look the same.
     variant: z.enum(['enclosed', 'full', 'bleed']),
     caption: z.string().optional(),
   }),
   z.object({ type: z.literal('quote'), text: z.string() }),
-  // Manual column break for the spread layout — content after it starts
-  // in the next column. A no-op in the single-column layouts.
+  // Manual section break for the spread layout — ends the current
+  // two-column section and starts a fresh one below it. A no-op in the
+  // single-column layouts.
   z.object({ type: z.literal('break') }),
 ]);
 
@@ -61,8 +64,8 @@ const work = defineCollection({
     stage: z.string().optional(),
     tags: z.array(z.string()).optional(),
     // Detail-view layout in the story modal: "flow" (default single
-    // column) or "spread" (magazine-style columns, scrolled sideways —
-    // an experiment; see .story-modal__body--spread in index.astro).
+    // column) or "spread" (magazine-style stack of two-column sections
+    // — an experiment; see .story-modal__body--spread in index.astro).
     layout: z.enum(["flow", "spread"]).default("flow"),
     blocks: z.array(block).default([]),
   }),
