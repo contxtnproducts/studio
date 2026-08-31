@@ -762,19 +762,17 @@ const testimonials = [
       sections.forEach((s) => io.observe(s));
     })();
 
-    // Testimonials slider — same leave/enter recipe as the story-modal's
-    // switchStory(): the outgoing slide gets [data-leaving] (CSS
-    // transitions it off), then after that transition's duration the
-    // hidden attributes actually swap and the incoming slide gets
-    // [data-entering] (its off-rest position, painted before the attr
-    // is removed next frame so it transitions in from there rather than
-    // snapping to rest — the 320ms timeout below matches the CSS
-    // transition-duration, see .testimonial). Click is delegated on the
-    // whole .testimonial block — name and quote both — not just the
-    // quote text, so hovering or clicking the name also advances the
-    // slider; the "Next" span is purely visual, not a separate control.
-    // "Next" only renders when there's more than one testimonial (see
-    // the markup), so this never needs to handle a length-1 no-op case.
+    // Testimonials slider — a cross-fade. Both slides sit in the same
+    // grid cell (see .testimonials CSS), so the incoming quote is
+    // un-hidden at its start pose and, on the next frame, the outgoing
+    // one starts leaving while the incoming one settles to rest — the
+    // two animate together over one duration rather than a sequential
+    // out-then-in with a visible gap. The 450ms timeout matches the
+    // CSS transition-duration (see .testimonial). Click is delegated on
+    // the whole .testimonial block — name and quote both — so clicking
+    // anywhere in it advances the slider; the "Next" span is purely
+    // visual. "Next" only renders when there's more than one
+    // testimonial, so this never needs a length-1 no-op case.
     (function () {
       const slides = Array.from(document.querySelectorAll("[data-testimonial]"));
       if (slides.length < 2) return;
@@ -788,17 +786,17 @@ const testimonials = [
           const from = slides[current];
           current = (current + 1) % slides.length;
           const to = slides[current];
-          from.dataset.leaving = "true";
+          to.hidden = false;
+          to.dataset.entering = "true";
+          requestAnimationFrame(() => {
+            from.dataset.leaving = "true";
+            delete to.dataset.entering;
+          });
           setTimeout(() => {
             from.hidden = true;
             delete from.dataset.leaving;
-            to.hidden = false;
-            to.dataset.entering = "true";
-            requestAnimationFrame(() => {
-              delete to.dataset.entering;
-              switching = false;
-            });
-          }, 320);
+            switching = false;
+          }, 450);
         });
       });
     })();
@@ -2456,13 +2454,16 @@ const testimonials = [
   .testimonials-section {
     padding: var(--section-y) var(--pad-x);
   }
+  /* Grid stack — every slide occupies the same cell so the incoming
+     and outgoing quotes can cross-fade over each other with no gap and
+     no reflow mid-transition (only one is ever un-hidden at rest). */
   .testimonials {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    display: grid;
     max-width: 366px;
   }
+  .testimonial { grid-area: 1 / 1; }
+  .testimonial[hidden] { display: none; }
   .testimonial__text {
     margin: 0;
   }
@@ -2495,24 +2496,22 @@ const testimonials = [
     font-size: var(--size-mast);
     color: var(--black);
   }
-  /* Swap animation — same leave/enter recipe as .story-modal__body's
-     own next/prev transition (see switchStory() in the script): rest
-     state transitions opacity+transform, [data-leaving]/[data-entering]
-     set the off-rest values the JS toggles around the actual
-     hidden-attribute swap. Slower and eased-out (vs. story-modal__
-     body's linear-ish 200ms ease) — same curve as the page's own
-     .reveal-item fades — reads noticeably smoother for a small block
-     like this; the JS's 320ms timeout matches this duration. cursor
-     here (not on .testimonial__quote) — see the script, the whole
-     block including the name is the click target. */
+  /* Swap animation — a cross-fade with a gentle vertical drift, on the
+     same cubic-bezier(0.65, 0, 0.35, 1) curve the rest of the site
+     uses (the .u underline redraw, the hover flourishes). Outgoing and
+     incoming animate at the same time (see the script — no sequential
+     hand-off, no gap), so it reads as one smooth exchange. cursor here
+     (not on .testimonial__quote) — the whole block, name included, is
+     the click target. */
   .testimonial {
     opacity: 1;
     transform: translateY(0);
-    transition: opacity 320ms ease-out, transform 320ms ease-out;
+    transition: opacity 450ms cubic-bezier(0.65, 0, 0.35, 1),
+                transform 450ms cubic-bezier(0.65, 0, 0.35, 1);
     cursor: pointer;
   }
-  .testimonial[data-leaving] { opacity: 0; transform: translateY(-10px); }
-  .testimonial[data-entering] { opacity: 0; transform: translateY(10px); }
+  .testimonial[data-leaving] { opacity: 0; transform: translateY(-6px); }
+  .testimonial[data-entering] { opacity: 0; transform: translateY(6px); }
 
   /* --- Footer bar ------------------------------------------------ */
   .navbar {
