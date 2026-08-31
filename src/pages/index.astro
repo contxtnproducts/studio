@@ -140,14 +140,14 @@ const detailStories = [
   ...stories
     .filter((s) => s.data.active && !s.data.draft)
     .map((s) => {
-      const { title, role, context, stage, tags, blocks } = s.data;
+      const { title, role, context, stage, tags, blocks, layout } = s.data;
       const attributes = [
         ["Role", role],
         ["Context", context],
         ["Stage", stage],
         ["Tags", tags?.join(" ; ")],
       ].filter(([, value]) => value);
-      return { slug: s.id, story: { title, attributes, blocks } };
+      return { slug: s.id, story: { title, attributes, blocks, layout } };
     }),
   ...moreDetails,
 ];
@@ -576,7 +576,7 @@ const testimonials = [
   <div class="story-modal" id="story-modal" role="dialog" aria-modal="true" tabindex="-1" data-open="false" data-visible="false">
     <div class="story-modal__scroll">
       {detailStories.map((s) => (
-        <article class={`story-modal__body${s.story ? "" : " story-modal__body--gallery"}`} data-story={s.slug} hidden>
+        <article class={`story-modal__body${s.story ? (s.story.layout === "spread" ? " story-modal__body--spread" : "") : " story-modal__body--gallery"}`} data-story={s.slug} hidden>
           {s.story ? (
             <>
               <p class="story-modal__title" id={`story-modal-heading-${s.slug}`}>{s.story.title}</p>
@@ -1797,6 +1797,87 @@ const testimonials = [
     margin-left: 0;
     padding-left: 0;
     padding-right: 0;
+  }
+
+  /* --- Spread layout (experiment) ---------------------------------
+     A story with layout: "spread" runs its body into magazine columns
+     the panel scrolls SIDEWAYS through, instead of a tall single
+     column scrolled down. Only the modal gets this — the standalone
+     /stories/ page stays a normal article. */
+  #story-modal:has(.story-modal__body--spread:not([hidden])) {
+    overflow: hidden;
+  }
+  .story-modal__scroll:has(.story-modal__body--spread:not([hidden])) {
+    max-width: none;
+    height: 100%;
+    padding: 72px var(--strip);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+  }
+  .story-modal__body--spread {
+    height: 100%;
+    column-width: 21rem;
+    column-gap: 4rem;
+    column-fill: auto;
+    column-rule: 1px solid var(--grey-1);
+  }
+  /* keep each block whole across a column break; keep a heading with
+     whatever follows it so it never sits alone at a column bottom */
+  .story-modal__body--spread > * {
+    break-inside: avoid;
+  }
+  .story-modal__body--spread .story-modal__heading {
+    break-after: avoid;
+  }
+  /* title runs full width as a masthead above the columns */
+  .story-modal__body--spread .story-modal__title {
+    column-span: all;
+    margin-bottom: 24px;
+  }
+  .story-modal__body--spread .story-modal__attrs {
+    column-span: all;
+    margin-bottom: 40px;
+  }
+  /* neutralise the single-column measure caps and full-bleed breakouts
+     — they fight the column box */
+  .story-modal__body--spread .story-modal__p,
+  .story-modal__body--spread .story-modal__heading,
+  .story-modal__body--spread .story-modal__list {
+    max-width: none;
+  }
+  .story-modal__body--spread .story-modal__image,
+  .story-modal__body--spread .story-modal__image--full,
+  .story-modal__body--spread .story-modal__quote {
+    width: auto;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .story-modal__body--spread .story-modal__image img,
+  .story-modal__body--spread .story-modal__image--enclosed img {
+    width: 100%;
+    max-width: none;
+  }
+  .story-modal__body--spread .story-modal__quote-text {
+    max-width: none;
+    padding: 32px 0;
+    font-size: 20px;
+  }
+  /* Phone — columns don't fit; fall back to one column scrolled down. */
+  @media (max-width: 900px) {
+    #story-modal:has(.story-modal__body--spread:not([hidden])) {
+      overflow-y: auto;
+    }
+    .story-modal__scroll:has(.story-modal__body--spread:not([hidden])) {
+      height: auto;
+      overflow-x: hidden;
+      padding: 96px 32px 48px;
+    }
+    .story-modal__body--spread {
+      height: auto;
+      column-width: auto;
+      column-count: 1;
+    }
   }
 
   /* Switching stories (next/prev) pushes the outgoing body out and the

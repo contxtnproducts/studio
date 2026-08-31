@@ -54,6 +54,10 @@ const work = defineCollection({
     context: z.string().optional(),
     stage: z.string().optional(),
     tags: z.array(z.string()).optional(),
+    // Detail-view layout in the story modal: "flow" (default single
+    // column) or "spread" (magazine-style columns, scrolled sideways —
+    // an experiment; see .story-modal__body--spread in index.astro).
+    layout: z.enum(["flow", "spread"]).default("flow"),
     blocks: z.array(block).default([]),
   }),
 });
