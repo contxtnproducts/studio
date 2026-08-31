@@ -1988,8 +1988,11 @@ const testimonials = [
     background: var(--cell-bg, #ededed);
     border-radius: 6px;
   }
-  /* full: no square floor (natural-proportion banner); same 15% inset. */
-  .story-modal__cell--full { min-height: 0; }
+  /* full: no square floor (natural-proportion banner), lighter 10% inset. */
+  .story-modal__cell--full {
+    min-height: 0;
+    padding: 10%;
+  }
   .story-modal__cell img {
     display: block;
     max-width: 100%;
