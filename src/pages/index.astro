@@ -2053,7 +2053,7 @@ const testimonials = [
     display: flex;
     flex-direction: column;
     gap: var(--lede-top);
-    padding: var(--content-top) var(--pad-x) 72px;
+    padding: var(--content-top) var(--pad-x) var(--section-y);
   }
   /* Scroll reveal — gated behind html.js (see Base.astro) so content
      just renders visible if JS never runs. Each line/row (.reveal-item,
@@ -2179,7 +2179,7 @@ const testimonials = [
     display: flex;
     gap: 0;
     align-items: flex-start;
-    padding: 62px var(--pad-x);
+    padding: var(--section-y) var(--pad-x);
   }
   .row__label {
     flex: none;
@@ -2198,7 +2198,7 @@ const testimonials = [
   .row--bookmarks .row__label { padding-top: 0; }
 
   /* --- Stories section ------------------------------------------ */
-  #stories { padding: 40px var(--pad-x); }
+  #stories { padding: var(--section-y) var(--pad-x); }
 
   /* Two columns: the mono row number (hugs its content) and the
      title (takes the rest). No inter-row rules in the redesign —
@@ -2377,7 +2377,7 @@ const testimonials = [
      the rule that sets it off; 64px top/bottom padding, 72px sides,
      same as every other section. */
   .testimonials-section {
-    padding: 64px var(--pad-x);
+    padding: var(--section-y) var(--pad-x);
   }
   .testimonials {
     position: relative;
@@ -2498,12 +2498,8 @@ const testimonials = [
      before this one hits.) */
   @media (max-width: 1024px) {
     .strip { display: none; }
-    /* Section side padding follows the --pad-x clamp (down to 28px);
-       vertical padding tightens to a flat 40px across the board. */
-    .intro { padding-bottom: 40px; }
-    #stories,
-    .row,
-    .testimonials-section { padding-top: 40px; padding-bottom: 40px; }
+    /* Section side + top/bottom padding both follow their clamps
+       (--pad-x / --section-y) — nothing to override here. */
     .masthead { gap: 12px; }
     .pill { white-space: normal; }
     .row { flex-direction: column; gap: 12px; }

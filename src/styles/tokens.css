@@ -55,17 +55,21 @@
 
   /* --- Layout --------------------------------------------------
      1440 frame: 72px margin strip, then the content column filling
-     the rest (1368px). Figma section geometry: 172px from the card
-     top to the cartouches, cartouches → hero gap 8px, 56px under the
-     hero, then a 1px rule between every section; section padding is a
-     flat 72px left/right and 40 (stories) / 62 (background,
-     bookmarks) / 64 (testimonials) top/bottom. */
+     the rest (1368px). 172px from the card top to the cartouches,
+     cartouches → hero gap 8px, then a 1px rule between every section.
+     --section-y is the single vertical breathing value used top and
+     bottom of every section AND under the hero, so every gap across a
+     separator is the same at every breakpoint (Figma specced these
+     per-section at 40–64px; unified to 62 for consistency). --pad-x
+     is the matching left/right value. Both scale below 1440 (see the
+     media query). */
   --frame:      1440px;
   --strip:      72px;
-  --pad-x:      72px;    /* section inner padding, left/right */
-  --content-top: 172px;  /* card top → cartouches */
-  --lede-top:   8px;     /* cartouches → hero */
-  --pad-bottom: 96px;    /* story-modal / [slug] bottom padding */
+  --pad-x:      72px;     /* section inner padding, left/right */
+  --section-y:  62px;     /* section inner padding, top/bottom (+ under the hero) */
+  --content-top: 172px;   /* card top → cartouches */
+  --lede-top:   8px;      /* cartouches → hero */
+  --pad-bottom: 96px;     /* story-modal / [slug] bottom padding */
 
   --measure-hero: 732px; /* reading width of the hero prose column */
   --label-w:      140px;  /* section-label column (Background / Bookmarks) */
@@ -87,6 +91,7 @@
     --size-story: clamp(1.125rem, 1.667vw, 1.5rem);
 
     --pad-x:       clamp(28px, 5vw, 72px);
+    --section-y:   clamp(40px, 4.306vw, 62px);
     --content-top: clamp(72px, 11.944vw, 172px);
   }
 }
