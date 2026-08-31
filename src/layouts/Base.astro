@@ -28,7 +28,7 @@ const { title, description } = Astro.props;
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Shantell+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;700&family=Spline+Sans:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Spline+Sans+Mono:wght@400;700&family=Spline+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
   </head>
@@ -40,6 +40,16 @@ const { title, description } = Astro.props;
 
 <style is:global>
   @import "../styles/tokens.css";
+
+  /* Figma's annotation face — not a public webfont, so it's self-hosted.
+     Drop FigmaHand.woff2 into public/fonts/ and it's picked up; until
+     then the archive notes fall back to a system hand font. */
+  @font-face {
+    font-family: "Figma Hand";
+    src: url("/fonts/FigmaHand.woff2") format("woff2");
+    font-weight: 400 600;
+    font-display: swap;
+  }
 
   *, *::before, *::after { box-sizing: border-box; }
 
