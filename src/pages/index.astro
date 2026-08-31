@@ -29,17 +29,24 @@ function photosFor(slug) {
     .map((x) => x.file);
 }
 
-// The "Mockups" story gallery lives in public/shots/mockups/, named
-// <index>-<1..6>col-<hex>-<name>.png — mirrors the "Cell" naming tried
-// out in the Figma mockup (node 1305:6298): index orders the cells,
-// Ncol is how many of a 6-column grid it spans (2 = one-third, 3 = one-
-// half, 4 = two-thirds, 6 = full width — sixths rather than thirds so
-// both 1/3 and 1/2 fractions land on whole columns), hex is the cell's
-// own background color (shows behind/around the image), name is just
-// descriptive. Dropping a new file in following this pattern is enough
-// — no code change needed.
+// Grid for the "visual archive" (opened by "A messier visual archive of
+// my work"). Drop image files into public/shots/mockups/ named:
+//
+//     <order>-<size>-<title>.<ext>
+//
+//   order   digits — controls the sequence          01, 2, 10, …
+//   size    sm | md | lg | full — width of the cell  ⅓ · ½ · ⅔ · full
+//   title   free text; dashes/underscores → spaces   shown on hover / as alt
+//   ext     png | jpg | jpeg | webp | gif | avif
+//
+//   e.g.  01-full-fleetflash-board.png   ·   06-sm-bixi-map.png
+//
+// Cells keep the image's own aspect ratio and the grid backfills gaps
+// (auto-flow: dense), so adding, removing, resizing or reordering is
+// just a matter of the filenames — no code change.
 const MOCKUPS_GALLERY_DIR = fileURLToPath(new URL("../../public/shots/mockups/", import.meta.url));
-const GALLERY_FILE_RE = /^(\d+)-([1-6])col-([0-9a-fA-F]{6})-(.+)\.png$/i;
+const GALLERY_FILE_RE = /^(\d+)-(sm|md|lg|full)-(.+)\.(png|jpe?g|webp|gif|avif)$/i;
+const GALLERY_SPAN = { sm: 4, md: 6, lg: 8, full: 12 }; // columns of a 12-col grid
 
 function mockupsGallery() {
   let files;
@@ -54,30 +61,14 @@ function mockupsGallery() {
       if (!m) return null;
       return {
         file: `/shots/mockups/${f}`,
-        index: Number(m[1]),
-        col: Number(m[2]),
-        color: `#${m[3]}`,
-        name: m[4].replace(/-/g, " "),
+        order: Number(m[1]),
+        span: GALLERY_SPAN[m[2].toLowerCase()],
+        label: m[3].replace(/[-_]+/g, " ").trim(),
       };
     })
     .filter((x) => x !== null)
-    .sort((a, b) => a.index - b.index)
-    .map((img, i) => ({ ...img, tip: GALLERY_TIP_DUMMY_TEXT[i % GALLERY_TIP_DUMMY_TEXT.length] }));
+    .sort((a, b) => a.order - b.order);
 }
-
-// Placeholder only — standing in for real per-cell captions while we
-// try out the hover-tooltip treatment (see .story-modal__cell-tip).
-// One distinct dummy string per cell (cycled by index if the gallery
-// ever outgrows this list) rather than one shared string, so hovering
-// between mockups is actually visible during review — and lengths
-// vary on purpose, to see how the tooltip wraps short vs. long.
-const GALLERY_TIP_DUMMY_TEXT = [
-  "Dummy caption #1 — a short one, the tight case.",
-  "Dummy caption #2 — a bit longer, enough to wrap onto a second line and show how that looks.",
-  "Dummy caption #3 — medium length, sitting between the short and long extremes.",
-  "Dummy caption #4 — another short one, just with different punctuation to vary the shape.",
-  "Dummy caption #5 — the longest of the set, meant to stress-test wrapping across three lines or more.",
-];
 
 const LINKEDIN_URL = "https://www.linkedin.com/in/poblete/";
 const NECTAR_URL = "https://www.nectar.buzz/en/";
@@ -267,7 +258,7 @@ const testimonials = [
   {
     name: "Armand Teychené",
     role: "CPTO",
-    org: "Frog (Capgemeni)",
+    org: "Frog / Capgemeni",
     quote: [
       "Thomas is a constructive and clever professional. As a UX designer ", { em: "with a strong technical background, he manages to integrate user needs as well as feasibility."}, " In a multidisciplinary team, he work in a fluent and efficient way with designers and engineers. Absolutely an enjoyable guy!",
       ]
@@ -638,11 +629,9 @@ const testimonials = [
                   {sec.images && sec.images.length > 0 && (
                     <div class="story-modal__gallery">
                       {sec.images.map((img) => (
-                        <div class="story-modal__cell" style={`--cell-col: ${img.col}; --cell-bg: ${img.color};`} data-cell-tip={img.tip}>
-                          <div class="story-modal__cell-inner">
-                            <img src={img.file} alt={img.name} loading="lazy" />
-                          </div>
-                        </div>
+                        <figure class="story-modal__cell" style={`--span: ${img.span};`} data-cell-tip={img.label}>
+                          <img src={img.file} alt={img.label} loading="lazy" />
+                        </figure>
                       ))}
                       <span class="story-modal__cell-tip"></span>
                     </div>
@@ -1987,67 +1976,35 @@ const testimonials = [
     max-width: 320px;
   }
 
-  /* Image gallery — a 6-column grid, each cell spanning 1-6 columns
-     per its filename (see mockupsGallery() up top: 2=1/3, 3=1/2, 4=2/3,
-     6=full). The cell's own
-     background color (also from the filename) shows as a mat around
-     the image rather than being cropped edge-to-edge, so it reads as
-     "a defined colour background" behind the photo, not just a photo
-     grid. Same recipe tried out in the Figma mockup (node 1305:6298,
-     "Cell/<tier>/<color>"), now driven by real files instead.
-
-     Escapes .story-modal__scroll's own padding via width/margin (same
-     technique as .content's own breakout — 100% + both paddings, not
-     100vw, see .story-modal__quote's own comment for why), then
-     re-adds padding-left/right matching the page's own gutter rhythm
-     (--strip left, 1.5x right — see .content), so the grid still has
-     the same left/right breathing room as everything else, just over
-     a wider track. See the mobile override below for the equivalent
-     at the width where .story-modal itself goes edge-to-edge. */
+  /* Visual-archive grid — a 12-column collage. Each cell spans 4 / 6 /
+     8 / 12 columns (sm / md / lg / full, from the filename) and is as
+     tall as its image's own aspect ratio, so screenshots keep their
+     natural proportions instead of floating in a fixed box. auto-flow
+     dense backfills the gap a mixed row leaves, so files drop in in any
+     order and still pack tightly. Full-bleed within the panel is
+     handled by .story-modal__body--gallery's own rules (64px inset all
+     round); nothing to break out of here. */
   .story-modal__gallery {
     position: relative;
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(12, 1fr);
+    grid-auto-flow: row dense;
+    align-items: start;
     gap: 24px;
-    margin-top: 8px;
-    box-sizing: border-box;
-    width: calc(100% + var(--strip) + var(--strip) * 1.5);
-    margin-left: calc(-1 * var(--strip));
-    padding-left: var(--strip);
-    padding-right: calc(var(--strip) * 1.5);
   }
   .story-modal__cell {
-    position: relative;
-    grid-column: span var(--cell-col);
-    background: var(--cell-bg);
-    border-radius: 4px;
-    min-height: 420px;
-    box-sizing: border-box;
-    overflow: hidden;
+    grid-column: span var(--span, 6);
+    margin: 0;
+    min-width: 0;
   }
-  /* Padding lives on this inner wrapper, not .story-modal__cell itself,
-     so the percentage has something to resolve against: a percentage
-     padding is computed from the WIDTH of the padded element's own
-     containing block — i.e. its parent — so 15% here means 15% of
-     .story-modal__cell's own (grid-span-driven) width, exactly "15% of
-     the width of the bloc" for every cell regardless of its 1-6col
-     span. Padding directly on .story-modal__cell would instead resolve
-     against .story-modal__gallery's width, giving every cell the same
-     fixed padding no matter its own size — not what was asked. */
-  .story-modal__cell-inner {
-    width: 100%;
-    height: 100%;
-    box-sizing: border-box;
-    padding: 15%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .story-modal__cell-inner img {
+  .story-modal__cell img {
     display: block;
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
+    border: 1px solid var(--grey-1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03),
+                0 12px 28px -8px rgba(0, 0, 0, 0.08);
   }
   /* Hover caption — same fade interaction as .story-actions__tip (the
      rail's "Next story [→]" etc. tooltips): mono face, fast opacity
@@ -2060,9 +2017,8 @@ const testimonials = [
      children, only for entering/leaving the container itself. Position
      tracks the cursor via --tip-x/--tip-y (also set on mousemove) with
      a +16px lead so it trails just past the pointer. Text swaps per
-     cell (see the mouseover handler below) but is still a placeholder
-     — see GALLERY_TIP_DUMMY_TEXT up top — standing in while this
-     interaction itself is being tried out. */
+     cell (see the mouseover handler below), reading each cell's
+     data-cell-tip — the <title> slug from the filename. */
   .story-modal__cell-tip {
     position: absolute;
     left: 0;
@@ -2614,24 +2570,10 @@ const testimonials = [
     /* .story-modal__scroll's own padding changed above (32/48 instead
        of strip/strip*1.5), so the breakout's re-added padding has to
        match: 100% + 32 + 48, same 100%-not-100vw reasoning as the
-       base rules (see .story-modal__quote's own comment) — still true
-       here even though .story-modal itself is left:0 at this width
-       (so 100vw would happen to be close), no reason to reintroduce
-       the ambiguity just because it'd be less wrong in this one case.
-       Columns collapse to one: at 6 columns a 1-span cell would be a
-       sixth of an already-narrow viewport, too small for a mockup
-       screenshot to read — every cell stacks full width instead,
-       ignoring its desktop --cell-col, so each mockup stays legible
-       regardless of what fraction it was given on wide screens. */
-    .story-modal__gallery {
-      width: calc(100% + 32px + 48px);
-      margin-left: -32px;
-      padding-left: 32px;
-      padding-right: 48px;
-      grid-template-columns: 1fr;
-    }
-    .story-modal__cell { grid-column: 1; }
-    /* Same breakout swap as the gallery above, same reason. */
+       base rules (see .story-modal__quote's own comment). The archive
+       grid keeps its 12 columns here — the panel is still wide enough
+       that an sm (⅓) cell reads fine; it only stacks at the ~680px
+       block further down. */
     .story-modal__quote { width: calc(100% + 32px + 48px); margin-left: -32px; }
     .story-modal__quote-text { padding-left: 32px; padding-right: 48px; }
     .story-modal__image--full { width: calc(100% + 32px + 48px); margin-left: -32px; }
@@ -2639,5 +2581,16 @@ const testimonials = [
        (.story-peek above), so anchor to the viewport edge directly
        instead, with a 16px inset. */
     .story-actions { left: 16px; width: auto; }
+  }
+
+  /* Phone — the archive grid stacks to one column (an sm cell would be
+     ~100px wide otherwise) and its inset tightens to match the rest of
+     the modal. */
+  @media (max-width: 680px) {
+    .story-modal__scroll:has(.story-modal__body--gallery:not([hidden])) {
+      padding: 32px;
+    }
+    .story-modal__gallery { grid-template-columns: 1fr; gap: 16px; }
+    .story-modal__cell { grid-column: 1; }
   }
 </style>
