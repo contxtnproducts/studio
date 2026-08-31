@@ -36,7 +36,7 @@
      scaling lives in the media query below, each clamp's middle term
      set to value/14.4vw so it resolves to exactly the flat value at
      1440px and shrinks from there. */
-  --size-lede:      2rem;      /* 32px — hero prose (incl. the h1) */
+  --size-lede:      1.8rem;    /* 28.8px — hero prose (incl. the h1); 10% under the 32px Figma spec */
   --size-hero:      1.875rem;  /* 30px — story-detail titles (modal + [slug]) */
   --size-story:     1.5rem;    /* 24px — stories table titles */
   --size-foot:      1rem;      /* 16px, flat */
@@ -66,7 +66,9 @@
   --frame:      1440px;
   --strip:      72px;
   --pad-x:      72px;     /* section inner padding, left/right */
-  --section-y:  62px;     /* section inner padding, top/bottom (+ under the hero) */
+  --section-y:  73px;     /* section inner padding, top/bottom (+ under the hero).
+                             ~18% over the 62px Figma value — the mathematically
+                             equal gaps read a touch tight next to the text blocks. */
   --content-top: 172px;   /* card top → cartouches */
   --lede-top:   8px;      /* cartouches → hero */
   --pad-bottom: 96px;     /* story-modal / [slug] bottom padding */
@@ -86,12 +88,12 @@
    for the narrow layout. */
 @media (max-width: 1440px) {
   :root {
-    --size-lede:  clamp(1.375rem, 2.222vw, 2rem);
+    --size-lede:  clamp(1.2375rem, 2vw, 1.8rem);
     --size-hero:  clamp(1.375rem, 2.083vw, 1.875rem);
     --size-story: clamp(1.125rem, 1.667vw, 1.5rem);
 
     --pad-x:       clamp(28px, 5vw, 72px);
-    --section-y:   clamp(40px, 4.306vw, 62px);
+    --section-y:   clamp(44px, 5.069vw, 73px);
     --content-top: clamp(72px, 11.944vw, 172px);
   }
 }
