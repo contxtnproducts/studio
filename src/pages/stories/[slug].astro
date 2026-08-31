@@ -148,6 +148,10 @@ const attributes = [
                 {block.caption && <p class="story__caption story__pad">{block.caption}</p>}
               </div>
             );
+          case "break":
+            // Column breaks only mean something in the modal's spread
+            // layout — nothing to render on the single-column page.
+            return null;
           default:
             return null;
         }

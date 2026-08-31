@@ -25,10 +25,16 @@ const block = z.discriminatedUnion('type', [
     type: z.literal('image'),
     src: z.string(),
     alt: z.string(),
-    variant: z.enum(['enclosed', 'full']),
+    // enclosed = sits in the column flow; full = spans both columns at
+    // content width; bleed = spans and pushes past the content edges.
+    // (Outside the spread layout, full and bleed look the same.)
+    variant: z.enum(['enclosed', 'full', 'bleed']),
     caption: z.string().optional(),
   }),
   z.object({ type: z.literal('quote'), text: z.string() }),
+  // Manual column break for the spread layout — content after it starts
+  // in the next column. A no-op in the single-column layouts.
+  z.object({ type: z.literal('break') }),
 ]);
 
 const work = defineCollection({

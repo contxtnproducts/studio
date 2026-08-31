@@ -615,6 +615,8 @@ const testimonials = [
                         {block.caption && <p class="story-modal__caption">{block.caption}</p>}
                       </div>
                     );
+                  case "break":
+                    return <div class="story-modal__break" aria-hidden="true" />;
                   default:
                     return null;
                 }
@@ -1801,22 +1803,40 @@ const testimonials = [
 
   /* --- Spread layout (experiment) ---------------------------------
      A story with layout: "spread" keeps the normal content width and
-     vertical scroll, but sets the body in two balanced columns. Title
-     + attributes ride in the first column; full-width images and the
-     pull-quote span both. Only the modal — the standalone /stories/
-     page stays a plain article. */
+     vertical scroll, and sets the body in two balanced columns.
+
+       column content : H1 + attributes (first section only), H2,
+                        paragraph, list, enclosed image
+       full-width section : `full` image (spans the two columns),
+                            `bleed` image (spans + past the edges),
+                            quote (centred)
+       `break` block  : forces what follows into the next column
+
+     Only the modal — the standalone /stories/ page stays a plain
+     single-column article. */
   .story-modal__body--spread {
     column-count: 2;
     column-gap: 3rem;
     column-rule: 1px solid var(--grey-1);
   }
   /* keep each block whole across a column break; keep a heading glued
-     to whatever follows it */
+     to whatever follows it. Lists behave like paragraphs — they may
+     break across a column, but not mid-item. */
   .story-modal__body--spread > * {
     break-inside: avoid;
   }
   .story-modal__body--spread .story-modal__heading {
     break-after: avoid;
+  }
+  .story-modal__body--spread .story-modal__list {
+    break-inside: auto;
+  }
+  .story-modal__body--spread .story-modal__list li {
+    break-inside: avoid;
+  }
+  /* manual column break */
+  .story-modal__break {
+    break-before: column;
   }
   /* title + attributes sit in column one, trimmed to fit it */
   .story-modal__body--spread .story-modal__title {
@@ -1827,20 +1847,20 @@ const testimonials = [
   .story-modal__body--spread .story-modal__attrs {
     margin-bottom: 28px;
   }
-  /* span both columns */
+  /* full-width sections span both columns (which also breaks the flow) */
   .story-modal__body--spread .story-modal__image--full,
+  .story-modal__body--spread .story-modal__image--bleed,
   .story-modal__body--spread .story-modal__quote {
     column-span: all;
   }
-  /* neutralise the single-column measure caps and the full-bleed
-     breakout margins — they fight the column box */
+  /* neutralise the single-column measure caps */
   .story-modal__body--spread .story-modal__p,
   .story-modal__body--spread .story-modal__heading,
   .story-modal__body--spread .story-modal__list {
     max-width: none;
   }
-  .story-modal__body--spread .story-modal__image--full,
-  .story-modal__body--spread .story-modal__quote {
+  /* `full` sits at content width (kill its breakout); `bleed` keeps it */
+  .story-modal__body--spread .story-modal__image--full {
     width: auto;
     margin-left: 0;
     margin-right: 0;
@@ -1848,6 +1868,24 @@ const testimonials = [
   .story-modal__body--spread .story-modal__image img {
     width: 100%;
     max-width: none;
+  }
+  /* no captions in the spread for now */
+  .story-modal__body--spread .story-modal__caption {
+    display: none;
+  }
+  /* quote as a full-width section: centred, roomier */
+  .story-modal__body--spread .story-modal__quote {
+    background: none;
+    width: auto;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .story-modal__body--spread .story-modal__quote-text {
+    max-width: 34rem;
+    margin: 0 auto;
+    padding: 44px 0;
+    text-align: center;
+    font-size: 26px;
   }
   /* Phone — one column. */
   @media (max-width: 700px) {
@@ -1991,13 +2029,16 @@ const testimonials = [
     object-fit: cover;
   }
   /* Same breakout as the quote/gallery above (100% + both paddings,
-     not 100vw — see the quote's own comment for why). */
-  .story-modal__image--full {
+     not 100vw — see the quote's own comment for why). Outside the
+     spread layout, --bleed behaves like --full. */
+  .story-modal__image--full,
+  .story-modal__image--bleed {
     box-sizing: border-box;
     width: calc(100% + var(--strip) + var(--strip) * 1.5);
     margin-left: calc(-1 * var(--strip));
   }
-  .story-modal__image--full img {
+  .story-modal__image--full img,
+  .story-modal__image--bleed img {
     display: block;
     width: 100%;
     height: auto;

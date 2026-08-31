@@ -55,7 +55,7 @@ blocks:
   - type: image
     src: "/shots/stories/relion-org-model/image-70-full.png"
     alt: "Placeholder — a dashboard screenshot standing in for the real console."
-    variant: full
+    variant: bleed
     caption: "Placeholder caption. The office view: same records the field writes, at desk density."
 
   - type: heading
@@ -64,6 +64,8 @@ blocks:
     text: "Placeholder. Adoption in the field was the easy metric — people used it because the old workflow was worse. The number the business cared about was how much data made it to billing without a human touching it, and that went from roughly half to the high nineties over two quarters."
   - type: paragraph
     text: "Placeholder. This section is padding so the spread has a comfortable amount of content to run into a third and fourth column. Feel free to delete all of it."
+
+  - type: break
 
   - type: heading
     text: "A few more screens"
