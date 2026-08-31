@@ -1029,8 +1029,18 @@ const testimonials = [
 
       // Every story with a detail payload, in the same order they're
       // defined in — what the next-story action and its ↻-wraparound
-      // cycle through.
+      // cycle through. The gallery-only "archive" body is a valid
+      // destination of Next (you can land on it from a story) but not a
+      // source: goNext() bails there and its button is hidden (see
+      // syncNav) so the archive reads as the end of the rotation.
       const storySlugs = Array.from(bodies).map((b) => b.dataset.story);
+      const gallerySlugs = Array.from(bodies)
+        .filter((b) => b.classList.contains("story-modal__body--gallery"))
+        .map((b) => b.dataset.story);
+      const nextBtn = document.getElementById("story-next");
+      function syncNav(slug) {
+        if (nextBtn) nextBtn.hidden = gallerySlugs.includes(slug);
+      }
 
       // Everything that isn't the story page itself — made inert
       // (unfocusable, unclickable) while a story is open, since it's
@@ -1061,6 +1071,7 @@ const testimonials = [
         if (!matched) return;
 
         currentSlug = slug;
+        syncNav(slug);
         history.replaceState(null, "", `#story=${encodeURIComponent(slug)}`);
         clearTimeout(closeTimer);
         lastFocused = document.activeElement;
@@ -1107,6 +1118,7 @@ const testimonials = [
         }
 
         currentSlug = slug;
+        syncNav(slug);
         history.replaceState(null, "", `#story=${encodeURIComponent(slug)}`);
 
         clearTimeout(switchTimer);
@@ -1129,6 +1141,8 @@ const testimonials = [
 
       function goNext() {
         if (!currentSlug || storySlugs.length === 0) return;
+        // No "next" out of the gallery archive — it's the end of the line.
+        if (gallerySlugs.includes(currentSlug)) return;
         const idx = storySlugs.indexOf(currentSlug);
         switchStory(storySlugs[(idx + 1) % storySlugs.length], 1);
       }
@@ -1696,6 +1710,10 @@ const testimonials = [
   .story-actions[data-open="true"] { display: flex; }
   .story-actions[data-visible="true"] { opacity: 1; }
 
+  /* `display: grid` below would otherwise beat the UA [hidden] rule,
+     leaving a hidden button (e.g. Next, on the gallery archive) still
+     visible — so restore it explicitly. */
+  .story-actions__btn[hidden] { display: none; }
   .story-actions__btn {
     position: relative;
     display: grid;
