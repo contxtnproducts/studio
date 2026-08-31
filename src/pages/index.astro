@@ -408,11 +408,11 @@ const testimonials = [
             {bookmarks.map((b, i) => (
               b.url ? (
                 <a class="bookmarks__item reveal-item" style={`--i: ${i + 1}`} href={b.url} target="_blank" rel="noopener noreferrer">
-                  <span class="u">{b.title}</span>
+                  {b.title}
                 </a>
               ) : (
                 <span class="bookmarks__item reveal-item" style={`--i: ${i + 1}`}>
-                  <span class="u">{b.title}</span>
+                  {b.title}
                 </span>
               )
             ))}
@@ -1353,19 +1353,20 @@ const testimonials = [
     padding: 0;
   }
 
-  /* Isometric line-art, sitting to the right of the hero prose. This
-     is the full-resolution source bitmap (923x1508, transparent) that
-     backs the Figma "illustration" frame (1431:214) — the earlier
-     asset was a 1x frame screenshot, which upscaled soft. Shown ~1.6x
-     downscaled (560 / 923) so it stays crisp on hi-dpi. Whole scene
-     visible, only a small right bleed past the card edge (cropped by
-     .frame's overflow:clip). Behind the prose (z-index 0; .hero is 1);
-     hidden on narrow viewports — see the @media rule. */
+  /* Isometric line-art, to the right of the hero prose. The asset is a
+     pre-composited crop of the hi-res source (923x1508 transparent),
+     rebuilt at 2x (1196x1764) to reproduce the Figma "illustration"
+     frame exactly — warehouse roof cut at the top, office/tree cut on
+     the right. Displayed at 598px = 2x downscale, so it's crisp on
+     hi-dpi. Right edge flush to the content column; a little more of
+     the top/right bleeds past the card (cropped by .frame's
+     overflow:clip). Behind the prose (z-index 0; .hero is 1); hidden
+     on narrow viewports — see the @media rule. */
   .hero-illo {
     position: absolute;
-    top: 0;
-    right: -48px;
-    width: 560px;
+    top: -16px;
+    right: -16px;
+    width: 598px;
     height: auto;
     z-index: 0;
     pointer-events: none;
@@ -2005,24 +2006,12 @@ const testimonials = [
   .story-modal__cell-tip.is-visible { opacity: 1; }
 
   /* --- Masthead ------------------------------------------------- */
+  /* Not sticky — scrolls away with the rest of the page. */
   .masthead {
-    position: sticky;
-    top: 0;
-    z-index: 5;
     display: flex;
     flex-wrap: wrap;
     gap: 24px;
     padding: 40px 0;
-    /* This is the actual fix for stories/about rows not hovering:
-       .masthead is sticky, so it's pinned over whatever's scrolled
-       underneath it — but its 40px top/bottom padding makes its real
-       (invisible) hit area ~110px tall, nearly 4x its visible pill
-       row, silently intercepting hover/click on anything scrolled
-       into that padding band. Nothing in here is interactive (no
-       links/buttons — just text), so pointer-events:none is a free
-       fix: clicks and hover now pass straight through to whatever's
-       actually underneath. */
-    pointer-events: none;
   }
   .pill {
     border: 1px solid var(--grey-1);
@@ -2309,18 +2298,18 @@ const testimonials = [
     flex-direction: column;
     gap: var(--item-gap);
   }
-  /* Each entry: title over description, 12px apart (Figma gap-12);
-     32px between entries is .about's own gap. The row carries no
-     cursor or hover treatment — only the org link inside .about__title
-     is interactive (underline redraw comes from the global .u:hover). */
+  /* Each entry: title tight over its description; 32px between entries
+     is .about's own gap. The row carries no cursor or hover treatment
+     — only the org link inside .about__title is interactive (underline
+     redraw comes from the global .u:hover). */
   .about__row {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 4px;
   }
   .about__title {
     font-size: var(--size-label);
-    line-height: var(--leading-body);
+    line-height: 1.35;
     letter-spacing: var(--track-hero);
     font-weight: 500;
   }
@@ -2343,9 +2332,9 @@ const testimonials = [
     flex-direction: column;
     gap: var(--row-gap); /* 24px per Figma — tighter than about's 32px */
   }
-  /* align-self + fit-content so the <a>'s hit area is only as wide as
-     its text (wrapping still capped at 320px), not the full column —
-     only the link itself is interactive. */
+  /* No underline (plain text links); align-self + fit-content so the
+     <a>'s hit area is only as wide as its text (wrapping still capped
+     at 320px), not the full column. */
   .bookmarks__item {
     display: block;
     align-self: flex-start;
@@ -2355,6 +2344,12 @@ const testimonials = [
     line-height: var(--leading-body);
     letter-spacing: var(--track-hero);
     cursor: default;
+    transition: color 900ms ease-out;
+  }
+  a.bookmarks__item:hover,
+  a.bookmarks__item:focus-visible {
+    color: var(--main);
+    transition: color 100ms ease-out;
   }
   .bookmarks__more {
     display: block;
