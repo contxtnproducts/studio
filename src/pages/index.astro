@@ -32,20 +32,22 @@ function photosFor(slug) {
 // Grid for the "visual archive" (opened by "A messier visual archive of
 // my work"). Drop image files into public/shots/mockups/ named:
 //
-//     <order>-<size>-<title>.<ext>
+//     <order>-<size>[-<hex>]-<title>.<ext>
 //
 //   order   digits — controls the sequence          01, 2, 10, …
 //   size    sm | md | lg | full — width of the cell  ⅓ · ½ · ⅔ · full
+//   hex     OPTIONAL 6 hex digits — the cell's mat   e9e9e9, bbc5bb, …
+//           colour behind the image; omit for the default light grey
 //   title   free text; dashes/underscores → spaces   shown on hover / as alt
 //   ext     png | jpg | jpeg | webp | gif | avif
 //
-//   e.g.  01-full-fleetflash-board.png   ·   06-sm-bixi-map.png
+//   e.g.  01-full-e9e9e9-fleetflash-board.png  ·  06-sm-bixi-map.png
 //
-// Cells keep the image's own aspect ratio and the grid backfills gaps
-// (auto-flow: dense), so adding, removing, resizing or reordering is
-// just a matter of the filenames — no code change.
+// Each image sits inset on its mat, keeping its own aspect ratio; the
+// grid backfills gaps (auto-flow: dense). Adding, removing, resizing,
+// recolouring or reordering is just the filenames — no code change.
 const MOCKUPS_GALLERY_DIR = fileURLToPath(new URL("../../public/shots/mockups/", import.meta.url));
-const GALLERY_FILE_RE = /^(\d+)-(sm|md|lg|full)-(.+)\.(png|jpe?g|webp|gif|avif)$/i;
+const GALLERY_FILE_RE = /^(\d+)-(sm|md|lg|full)(?:-([0-9a-f]{6}))?-(.+)\.(png|jpe?g|webp|gif|avif)$/i;
 const GALLERY_SPAN = { sm: 4, md: 6, lg: 8, full: 12 }; // columns of a 12-col grid
 
 function mockupsGallery() {
@@ -63,7 +65,8 @@ function mockupsGallery() {
         file: `/shots/mockups/${f}`,
         order: Number(m[1]),
         span: GALLERY_SPAN[m[2].toLowerCase()],
-        label: m[3].replace(/[-_]+/g, " ").trim(),
+        bg: m[3] ? `#${m[3]}` : null,
+        label: m[4].replace(/[-_]+/g, " ").trim(),
       };
     })
     .filter((x) => x !== null)
@@ -629,7 +632,11 @@ const testimonials = [
                   {sec.images && sec.images.length > 0 && (
                     <div class="story-modal__gallery">
                       {sec.images.map((img) => (
-                        <figure class="story-modal__cell" style={`--span: ${img.span};`} data-cell-tip={img.label}>
+                        <figure
+                          class="story-modal__cell"
+                          style={`--span: ${img.span};${img.bg ? ` --cell-bg: ${img.bg};` : ""}`}
+                          data-cell-tip={img.label}
+                        >
                           <img src={img.file} alt={img.label} loading="lazy" />
                         </figure>
                       ))}
@@ -1977,13 +1984,12 @@ const testimonials = [
   }
 
   /* Visual-archive grid — a 12-column collage. Each cell spans 4 / 6 /
-     8 / 12 columns (sm / md / lg / full, from the filename) and is as
-     tall as its image's own aspect ratio, so screenshots keep their
-     natural proportions instead of floating in a fixed box. auto-flow
-     dense backfills the gap a mixed row leaves, so files drop in in any
-     order and still pack tightly. Full-bleed within the panel is
-     handled by .story-modal__body--gallery's own rules (64px inset all
-     round); nothing to break out of here. */
+     8 / 12 columns (sm / md / lg / full, from the filename) and sits on
+     a coloured mat (its --cell-bg, or the default light grey), with the
+     image inset and lifted off it by a soft shadow. Cell height follows
+     the image's own aspect ratio; auto-flow dense backfills the gap a
+     mixed row leaves. Full-bleed within the panel is handled by
+     .story-modal__body--gallery's own rules (64px inset all round). */
   .story-modal__gallery {
     position: relative;
     display: grid;
@@ -1996,15 +2002,18 @@ const testimonials = [
     grid-column: span var(--span, 6);
     margin: 0;
     min-width: 0;
+    box-sizing: border-box;
+    padding: min(8%, 44px);
+    background: var(--cell-bg, #ededed);
+    border-radius: 6px;
   }
   .story-modal__cell img {
     display: block;
     width: 100%;
     height: auto;
-    border-radius: 6px;
-    border: 1px solid var(--grey-1);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03),
-                0 12px 28px -8px rgba(0, 0, 0, 0.08);
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06),
+                0 18px 44px -14px rgba(0, 0, 0, 0.22);
   }
   /* Hover caption — same fade interaction as .story-actions__tip (the
      rail's "Next story [→]" etc. tooltips): mono face, fast opacity
