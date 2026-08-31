@@ -343,7 +343,7 @@ const testimonials = [
             <a class="u em hero__name" href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer">Thomas Poblete</a>.
           </div>
           <p class="hero__para reveal-item" style="--i: 1">
-            15 years building a practice around ① learning how professionals work ② untangling operational
+            For 15 years I built a practice around ① learning how professionals work ② untangling operational
             workflows, and ③ shipping digital products they rely on.
           </p>
           <p class="hero__para reveal-item" style="--i: 2">
@@ -762,23 +762,24 @@ const testimonials = [
       sections.forEach((s) => io.observe(s));
     })();
 
-    // Testimonials slider — a cross-fade. Both slides sit in the same
-    // grid cell (see .testimonials CSS), so the incoming quote is
-    // un-hidden at its start pose and, on the next frame, the outgoing
-    // one starts leaving while the incoming one settles to rest — the
-    // two animate together over one duration rather than a sequential
-    // out-then-in with a visible gap. The 450ms timeout matches the
-    // CSS transition-duration (see .testimonial). Click is delegated on
-    // the whole .testimonial block — name and quote both — so clicking
-    // anywhere in it advances the slider; the "Next" span is purely
+    // Testimonials slider — a sequential fade so two quotes of
+    // different length never overlap: the current one fades out, then
+    // the next one is un-hidden and fades in from its start pose, with
+    // the block's height tweened across the swap (WAAPI, so it needs no
+    // CSS transition and doesn't collide with .reveal-item's). Click is
+    // delegated on the whole .testimonial block — name and quote both —
+    // so clicking anywhere advances it; the "Next" span is purely
     // visual. "Next" only renders when there's more than one
     // testimonial, so this never needs a length-1 no-op case.
     (function () {
+      const wrap = document.querySelector(".testimonials");
       const slides = Array.from(document.querySelectorAll("[data-testimonial]"));
-      if (slides.length < 2) return;
+      if (!wrap || slides.length < 2) return;
       let current = slides.findIndex((s) => !s.hidden);
       if (current < 0) current = 0;
       let switching = false;
+      const FADE = 240;
+
       slides.forEach((slide) => {
         slide.addEventListener("click", () => {
           if (switching) return;
@@ -786,17 +787,35 @@ const testimonials = [
           const from = slides[current];
           current = (current + 1) % slides.length;
           const to = slides[current];
-          to.hidden = false;
-          to.dataset.entering = "true";
-          requestAnimationFrame(() => {
-            from.dataset.leaving = "true";
-            delete to.dataset.entering;
-          });
+
+          const startH = wrap.getBoundingClientRect().height;
+          from.dataset.leaving = "true";
+
           setTimeout(() => {
             from.hidden = true;
             delete from.dataset.leaving;
+            to.hidden = false;
+            to.dataset.entering = "true"; // painted at opacity 0, drifted down
+            const endH = wrap.getBoundingClientRect().height;
+
+            // Ease the block between the two quote heights so it doesn't
+            // snap. WAAPI (no fill) reverts to auto on its own, so it
+            // needs no CSS transition and can't clash with .reveal-item's.
+            if (startH !== endH && wrap.animate) {
+              wrap.animate(
+                [{ height: startH + "px" }, { height: endH + "px" }],
+                { duration: 260, easing: "cubic-bezier(0.65, 0, 0.35, 1)" }
+              );
+            }
+
+            // Force a reflow so the opacity:0 start pose is committed,
+            // then drop the attr in the same tick — the fade-in fires
+            // reliably without waiting on a rAF, and `switching` is
+            // always released.
+            void to.offsetHeight;
+            delete to.dataset.entering; // …then fades in to rest
             switching = false;
-          }, 450);
+          }, FADE);
         });
       });
     })();
@@ -2454,15 +2473,16 @@ const testimonials = [
   .testimonials-section {
     padding: var(--section-y) var(--pad-x);
   }
-  /* Grid stack — every slide occupies the same cell so the incoming
-     and outgoing quotes can cross-fade over each other with no gap and
-     no reflow mid-transition (only one is ever un-hidden at rest). */
+  /* One quote in flow at a time — the swap fades the old one out, then
+     the new one in (never both at once, so two different-length quotes
+     never ghost over each other). overflow:hidden clips the brief
+     height tween the script runs across the swap so the block resizes
+     smoothly instead of snapping. */
   .testimonials {
     position: relative;
-    display: grid;
     max-width: 366px;
+    overflow: hidden;
   }
-  .testimonial { grid-area: 1 / 1; }
   .testimonial[hidden] { display: none; }
   .testimonial__text {
     margin: 0;
@@ -2496,18 +2516,18 @@ const testimonials = [
     font-size: var(--size-mast);
     color: var(--black);
   }
-  /* Swap animation — a cross-fade with a gentle vertical drift, on the
-     same cubic-bezier(0.65, 0, 0.35, 1) curve the rest of the site
-     uses (the .u underline redraw, the hover flourishes). Outgoing and
-     incoming animate at the same time (see the script — no sequential
-     hand-off, no gap), so it reads as one smooth exchange. cursor here
-     (not on .testimonial__quote) — the whole block, name included, is
-     the click target. */
+  /* Swap animation — fade + a small vertical drift on the site's
+     cubic-bezier(0.65, 0, 0.35, 1) curve (same as the .u redraw and
+     the hover flourishes). Sequential: the script fades the outgoing
+     quote out, swaps, then fades the incoming one in, tweening the
+     block's height across the swap. cursor here (not on
+     .testimonial__quote) — the whole block, name included, is the
+     click target. */
   .testimonial {
     opacity: 1;
     transform: translateY(0);
-    transition: opacity 450ms cubic-bezier(0.65, 0, 0.35, 1),
-                transform 450ms cubic-bezier(0.65, 0, 0.35, 1);
+    transition: opacity 240ms cubic-bezier(0.65, 0, 0.35, 1),
+                transform 240ms cubic-bezier(0.65, 0, 0.35, 1);
     cursor: pointer;
   }
   .testimonial[data-leaving] { opacity: 0; transform: translateY(-6px); }
