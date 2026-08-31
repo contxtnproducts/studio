@@ -43,7 +43,19 @@ const { title, description } = Astro.props;
 
   *, *::before, *::after { box-sizing: border-box; }
 
-  html { -webkit-text-size-adjust: 100%; }
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* A touch of breathing room above an anchor target (e.g. the hero's
+       "Stories from the field" link → #stories) so it doesn't land
+       flush against the viewport top. */
+    scroll-padding-top: 24px;
+  }
+  /* Smooth in-page anchor jumps — only when the visitor hasn't asked
+     for reduced motion. Applies to the document scroll only; the story
+     modal has its own (instant) scroll container. */
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
 
   body {
     margin: 0;
