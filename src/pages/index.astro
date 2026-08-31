@@ -1781,13 +1781,15 @@ const testimonials = [
 
   /* Gallery-only body ("A messier visual archive of my work") — no
      title/eyebrow/lede, so the 208px top padding is just dead space.
-     Pull it up and let the grid run the full width of the modal. */
+     Even inset on all four sides (equal top/bottom/left/right); the
+     grid fills what's left rather than breaking out. */
   .story-modal__scroll:has(.story-modal__body--gallery:not([hidden])) {
     max-width: none;
-    padding: 64px 0 var(--pad-bottom);
+    padding: 64px;
   }
   .story-modal__body--gallery .story-modal__gallery {
     width: 100%;
+    margin-top: 0;
     margin-left: 0;
     padding-left: 0;
     padding-right: 0;
