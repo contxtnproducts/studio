@@ -1,378 +1,2554 @@
 ---
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+import { getCollection } from "astro:content";
 import Base from "../layouts/Base.astro";
 
-// Drop your Figma exports into /public/shots/ using these filenames.
-// Until then each slot renders as an empty outlined tile at the
-// designed aspect ratio, so the layout is already correct.
-const rowA = [
-  { src: "/shots/01.png", w: 298, h: 187 },
-  { src: "/shots/02.png", w: 298, h: 187 },
-  { src: "/shots/03.png", w: 130, h: 187 },
-  { src: "/shots/04.png", w:  87, h: 186 },
-  { src: "/shots/05.png", w: 298, h: 187 },
-  { src: "/shots/06.png", w: 298, h: 187 },
+// "about" side-rail photos live in public/shots/about/, named
+// <slug>-<n>.png (e.g. nectar-1.png, nectar-2.png). photosFor() picks
+// up every file matching a given entry's slug, in numeric order, so
+// dropping a new nectar-5.png into the folder is enough — no code
+// change needed to pick it up.
+const ABOUT_PHOTOS_DIR = fileURLToPath(new URL("../../public/shots/about/", import.meta.url));
+
+function photosFor(slug) {
+  let files;
+  try {
+    files = fs.readdirSync(ABOUT_PHOTOS_DIR);
+  } catch {
+    return [];
+  }
+  const re = new RegExp(`^${slug}-(\\d+)\\.png$`, "i");
+  return files
+    .map((f) => {
+      const m = f.match(re);
+      return m ? { file: f, n: Number(m[1]) } : null;
+    })
+    .filter((x) => x !== null)
+    .sort((a, b) => a.n - b.n)
+    .map((x) => x.file);
+}
+
+// The "Mockups" story gallery lives in public/shots/mockups/, named
+// <index>-<1..6>col-<hex>-<name>.png — mirrors the "Cell" naming tried
+// out in the Figma mockup (node 1305:6298): index orders the cells,
+// Ncol is how many of a 6-column grid it spans (2 = one-third, 3 = one-
+// half, 4 = two-thirds, 6 = full width — sixths rather than thirds so
+// both 1/3 and 1/2 fractions land on whole columns), hex is the cell's
+// own background color (shows behind/around the image), name is just
+// descriptive. Dropping a new file in following this pattern is enough
+// — no code change needed.
+const MOCKUPS_GALLERY_DIR = fileURLToPath(new URL("../../public/shots/mockups/", import.meta.url));
+const GALLERY_FILE_RE = /^(\d+)-([1-6])col-([0-9a-fA-F]{6})-(.+)\.png$/i;
+
+function mockupsGallery() {
+  let files;
+  try {
+    files = fs.readdirSync(MOCKUPS_GALLERY_DIR);
+  } catch {
+    return [];
+  }
+  return files
+    .map((f) => {
+      const m = f.match(GALLERY_FILE_RE);
+      if (!m) return null;
+      return {
+        file: `/shots/mockups/${f}`,
+        index: Number(m[1]),
+        col: Number(m[2]),
+        color: `#${m[3]}`,
+        name: m[4].replace(/-/g, " "),
+      };
+    })
+    .filter((x) => x !== null)
+    .sort((a, b) => a.index - b.index)
+    .map((img, i) => ({ ...img, tip: GALLERY_TIP_DUMMY_TEXT[i % GALLERY_TIP_DUMMY_TEXT.length] }));
+}
+
+// Placeholder only — standing in for real per-cell captions while we
+// try out the hover-tooltip treatment (see .story-modal__cell-tip).
+// One distinct dummy string per cell (cycled by index if the gallery
+// ever outgrows this list) rather than one shared string, so hovering
+// between mockups is actually visible during review — and lengths
+// vary on purpose, to see how the tooltip wraps short vs. long.
+const GALLERY_TIP_DUMMY_TEXT = [
+  "Dummy caption #1 — a short one, the tight case.",
+  "Dummy caption #2 — a bit longer, enough to wrap onto a second line and show how that looks.",
+  "Dummy caption #3 — medium length, sitting between the short and long extremes.",
+  "Dummy caption #4 — another short one, just with different punctuation to vary the shape.",
+  "Dummy caption #5 — the longest of the set, meant to stress-test wrapping across three lines or more.",
 ];
 
-const rowB = [
-  { src: "/shots/07.png", w: 286, h: 179 },
-  { src: "/shots/08.png", w: 286, h: 179 },
-  { src: "/shots/09.png", w: 286, h: 179 },
-  { src: "/shots/10.png", w: 130, h: 187 },
-  { src: "/shots/11.png", w: 286, h: 179 },
-  { src: "/shots/12.png", w: 286, h: 179 },
+const LINKEDIN_URL = "https://www.linkedin.com/in/poblete/";
+const NECTAR_URL = "https://www.nectar.buzz/en/";
+const RELION_URL = "https://relioncharging.com";
+const BIXI_URL = "https://bixi.com";
+const ONE_OCEAN_URL = "https://www.oneocean.com/";
+const SID_LEE_URL = "https://vimeo.com/123442335";
+const ATTOMA_URL = "https://attoma.me/fr/attoma-dessine-moi-une-agence-de-design/";
+
+// Email is never written out in the markup. It is assembled at runtime
+// from these parts, so the page source contains no address to scrape.
+const MAIL_USER = "thomas.pob";
+const MAIL_HOST = "gmail.com";
+
+// "stories" — sourced from the work content collection (see
+// content.config.ts + src/content/work/*.md) rather than a hardcoded
+// array. Each entry with a real, published (draft: false) write-up
+// gets its own route at /stories/[slug]/ (see that page's own
+// getStaticPaths — same active/draft rules applied there). A row
+// whose entry is either draft or active:false renders as a plain,
+// inert, dimmed <div> with a "Soon" hover caption instead of a link
+// (see the markup below) — currently that's just bixi-bikes.md,
+// active:false with no write-up yet.
+const stories = (await getCollection("work")).sort((a, b) => a.data.order - b.data.order);
+
+// Detail-only entries — same story-modal template and open/close
+// machinery as the collection-backed stories below, triggered from
+// somewhere other than the stories table, so they're kept out of
+// `stories` rather than added as a row there. "mockups" doesn't have
+// a title/attributes/blocks shape at all (just a gallery), so it
+// can't be a `work` collection entry the way org-model/Nectar are —
+// "Or a visual repository →" in the hero is the one trigger for this
+// today.
+const moreDetails = [
+  {
+    slug: "mockups",
+    detail: {
+      eyebrow: "",
+      headline: "",
+      lede: "",
+      sections: [
+        {
+          images: mockupsGallery(),
+        },
+      ],
+    },
+  },
 ];
 
-const projects = [
-  {
-    name: "Nectar",
-    title: "An asset tracking suite to help beekeepers reduce losses and grow revenue.",
-    line: "Validating feasibility and market interest through MVP.",
-  },
-  {
-    name: "Relion",
-    title: "A maintenance platform for EV chargers, from issue detection to dispatch.",
-    line: "Leveraging UX as a differentiator after the seed round.",
-  },
-  {
-    name: "LispLogics/BIXI",
-    title: "An AI driven auto-dispatch software for large bike-sharing networks.",
-    line: "Materializing tech value through a platform.",
-  },
+// Every story with a detail payload — what actually renders as a
+// .story-modal__body panel (see the story-modal markup). Two shapes
+// mixed here on purpose: published stories precompute the exact same
+// { title, attributes, blocks } shape src/pages/stories/[slug].astro
+// computes for that story's real, direct-link route (`story`, below —
+// same filter/attributes logic, kept in sync by eye since it's a few
+// lines, not worth its own shared helper for two call sites). The
+// modal isn't a second copy of the content, just a second way to view
+// the same entry. moreDetails (`detail`, the older shape) is only
+// ever "mockups" now, which has no real route of its own to share
+// data with.
+const detailStories = [
+  ...stories
+    .filter((s) => s.data.active && !s.data.draft)
+    .map((s) => {
+      const { title, role, context, stage, tags, blocks } = s.data;
+      const attributes = [
+        ["Role", role],
+        ["Context", context],
+        ["Stage", stage],
+        ["Tags", tags?.join(" ; ")],
+      ].filter(([, value]) => value);
+      return { slug: s.id, story: { title, attributes, blocks } };
+    }),
+  ...moreDetails,
 ];
 
-const railWords = ["B2B", "SaaS", "AgTech"];
+// "about" — career history. badge: the "[Consultant]" mono tag before
+// the role, only on engagements that were one (null elsewhere). org
+// keeps its own url — Figma shows BIXI as plain underlined text with
+// no link, so it stays that way here too. stats: null skips the
+// muted line (Sid Lee's has none). slug matches this entry's photos
+// in public/shots/about/ (see photosFor above) — any entry without
+// matching files there just gets an empty photos list.
+const about = [
+  {
+    badge: "[Consultant] ",
+    role: "Founding Product Designer",
+    org: "ReliON",
+    url: RELION_URL,
+    stats: "EV charging infrastructure · 1,000+ stations",
+    slug: "relion",
+  },
+  {
+    badge: "[Consultant] ",
+    role: "Senior Product Designer",
+    org: "BIXI",
+    url: BIXI_URL,
+    stats: "Bike-sharing operations · 10,000 bikes",
+    slug: "bixi",
+  },
+  {
+    badge: null,
+    role: "Head of Product & Design",
+    org: "Nectar",
+    url: NECTAR_URL,
+    stats: "Commercial beekeeping · 320,000+ hives",
+    slug: "nectar",
+  },
+  {
+    badge: null,
+    role: "Lead Designer",
+    org: "One Ocean",
+    url: ONE_OCEAN_URL,
+    stats: "Commercial shipping · 22,000+ vessels",
+    slug: "one-ocean",
+  },
+  {
+    badge: null,
+    role: "Senior designer",
+    org: "Sid Lee’s innovation lab",
+    url: SID_LEE_URL,
+    stats: "VR, AR, IoT and 3D printing for corporate cust.",
+    slug: "sid-lee",
+  },
+  {
+    badge: null,
+    role: "Designer",
+    org: "Attoma",
+    url: ATTOMA_URL,
+    stats: "Interaction design studio for industrial projects",
+    slug: "attoma",
+  }
+].map((item) => ({ ...item, photos: photosFor(item.slug) }));
+
+// "Bookmarks" — external reads. Real URLs pending; renders as plain
+// underlined text (no href) until they're supplied.
+const bookmarks = [
+  { title: "Luke Wroblewski: The AI Steering Layer", url: "https://www.lukew.com/ff/entry.asp?2155" },
+  { title: "Marty Cagan: A Vision for Product Teams", url: "https://www.svpg.com/a-vision-for-product-teams/" },
+  { title: "Richard I. Cook: How Complex System Fails", url: "https://how.complexsystems.fail/?ref=sidebar" },
+  { title: "Marty Cagan: Discovery, Excuses", url: "https://www.svpg.com/discovery-excuses" },
+  { title: "Mapbox: Using Isocrones to Understand Reachability", url: "https://www.mapbox.com/blog/using-isochrones-to-understand-reachability-in-web-and-mobile-applications" },
+];
+
+// "Next" cycles through however many exist (wraps around), so adding
+// or removing an entry here is enough — no other code change needed.
+const testimonials = [
+  {
+    name: "Marc-André Robert",
+    role: "CEO",
+    org: "Nectar",
+    quote:
+      "Thomas’ expertise and commitment to product excellence had a significant impact on our company’s launch and growth. The deep understanding of the beekeeping industry he quickly developed, the ability to translate user needs into innovative features, his collaborative approach, vision and interpersonal abilities were key assets to Nectar. Thomas will undoubtedly bring value to any organization!",
+  },
+  {
+    name: "Jesse White",
+    role: "CPTO",
+    org: "Relion",
+    quote:
+      "Thomas was able to quickly grasp the domain of EV charging, build trust with our users, stakeholders and help us build a sharp UX. He challenged our ideas and engaged in constructive debates that elevated our work. The solutions we developed together reflected his ability to bridge  strategy, design, and delivery. Highly recommended for any organization looking to level up their product & design initiatives!"
+  },
+  {
+    name: "Benjamin Bazso",
+    role: "Dir. Of Engineering",
+    org: "Samsung",
+    quote:
+      "Designer meets software developer meets product manager. This is how I would describe Thomas in a nutshell. He’s able to craft impactful UX and got a great eye for visual design. He negotiates compromises really well, is an active technologist and a great product manager. He has a great work ethic, get the work done on time and is fun to work with!",
+  },
+  {
+    name: "Gilles Baudet",
+    role: "Digital Innovation Lead",
+    org: "Rolex",
+    quote:
+      "Thomas is a great person to work with. His ability to focus on project big picture and smallest details, along with his previous developer experience makes him the perfect designer to work with: high quality deliverables, technical feasibility always in mind, excellent communication skills and a solid team player. I'd love to have the chance to work with Thomas again!",
+  },
+  {
+    name: "Armand Teychené",
+    role: "CPTO",
+    org: "Frog (Capgemeni)",
+    quote:
+      "Thomas is a constructive and clever professional. As a UX designer with a strong technical background, he manage to integrate user needs as well as feasibility. In a multidisciplinary team, he work in a fluent and efficient way with designers and engineers. Absolutely an enjoyable guy!",
+  },
+  {
+    name: "Clement Etienne",
+    role: "Senior Software Engineer",
+    org: "AWS",
+    quote:
+      "As a designer, Thomas set a clear vision for our products and worked closely with us to make sure the team would deliver a usable, and appealing software. He’s been constantly looking for feedback from either the developers or our customer, making it a collaborative effort. ",
+  },
+];
 ---
 
 <Base
-  title="Applied Context — Thomas Poblete"
-  description="Applied Context is the micro-studio of designer Thomas Poblete. Design for complex B2B SaaS products."
+  title="poblete.design — Thomas Poblete"
+  description="poblete.design is the internet footprint of B2B software designer Thomas Poblete."
 >
+  <!-- .frame is the content card — near-white fill, hairline border and
+       soft left shadow, capped at the 1440 frame width and centred on
+       the --page-bg backdrop (Figma "Container"). Wraps the strip +
+       content column and the footer bar; overflow:clip crops the hero
+       illustration where it bleeds past the card's top and right
+       edges. The fixed overlay elements (side rail, story modal, hover
+       photo) stay outside it so they anchor to the viewport. -->
   <div class="frame">
-    <!-- Ruled margins -->
-    <div class="rule rule--left" aria-hidden="true"></div>
-    <div class="rule rule--right" aria-hidden="true"></div>
+  <div class="shell">
+    <!-- Margin strip. Fill and edge rule are CSS at the Figma geometry;
+         punches use the exported hole.png asset. Holes at 82 / 502 /
+         922 per the redesign (was 56 / 382 / 652). -->
+    <div class="strip" aria-hidden="true">
+      <img class="punch" style="--t:82px" src="/shots/hole.png" alt="" />
+      <img class="punch" style="--t:502px" src="/shots/hole.png" alt="" />
+      <img class="punch" style="--t:922px" src="/shots/hole.png" alt="" />
+    </div>
 
-    <!-- Right rail: display type running off the edge -->
-    <aside class="rail" aria-hidden="true">
-      {railWords.map((w, i) => (
-        <span class="rail__word" style={`--i:${i}`}>{w}</span>
-      ))}
-    </aside>
+    <div class="content">
+      <!-- Isometric line-art illustration, bleeding past the card's
+           top and right edges (cropped by .frame's overflow:clip).
+           Exported from the Figma "illustration" frame (node
+           1431:212). Sits behind the hero prose; hidden on narrow
+           viewports where it would collide with the text. -->
+      <img class="hero-illo" src="/shots/hero-illustration.png" alt="" aria-hidden="true" />
+      <!-- .masthead + .hero share this wrapper specifically so
+           .masthead's position:sticky has a containing block that
+           ends where the hero does — a sticky element stays pinned
+           only while its containing block is still passing under it,
+           so once .intro's bottom (the end of .hero) scrolls up to
+           meet the masthead's own height, it unsticks and scrolls
+           away with the rest of the page instead of staying pinned
+           for the whole scroll. Was a direct child of .content before
+           (spanning the full page height, sticking the whole way
+           down) — this wrapper is the actual fix, not a CSS property
+           on .masthead itself. -->
+      <div class="intro">
+        <header class="masthead">
+          <span class="pill pill--bold">
+            Discovery • Design • AI Building
+          </span>
+          <span class="pill">
+            <span class="pill__clocks">
+              Montreal <time id="clk-yul">--:--</time>
+              • Paris <time id="clk-par">--:--</time>
+            </span>
+          </span>
+        </header>
 
-    <header class="masthead">
-      <span class="masthead__mark">
-        <span class="dot" aria-hidden="true"></span>APPLIED CONTEXT
-      </span>
-      <nav class="masthead__nav">
-        Product Discovery <span class="sep">•</span> Product design
-        <span class="sep">•</span> Design leadership
-      </nav>
-    </header>
+        <section class="hero">
+          <div class="hero__para reveal-item" style="--i: 0">
+            <h1 class="hero__h1">Product design for complex B2B products.</h1>{" "}
+            poblete.design is the internet footprint of designer{" "}
+            <a class="u em hero__name" href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer">Thomas Poblete</a>.
+          </div>
+          <p class="hero__para reveal-item" style="--i: 1">
+            15 years: ① learning how professionals work ② untangling operational
+            workflows, and ③ shipping products they rely on.
+          </p>
+          <p class="hero__para reveal-item" style="--i: 2">
+            Recent chapters include building products and design practices with <a class="u" href={NECTAR_URL} target="_blank" rel="noopener noreferrer">Nectar</a> and <a class="u" href={RELION_URL} target="_blank" rel="noopener noreferrer">Relion</a>. Now working fractionally, with AI and code increasingly part of the practice.
+          </p>
+          <p class="hero__para reveal-item" style="--i: 3">
+            <a class="u" href="#stories">Stories from the field</a> ↓
+          </p>
+          <p class="hero__para reveal-item" style="--i: 4">
+            A messier visual <a class="u hero__inline-trigger" role="button" tabindex="0" data-open-story="mockups">archive of my work</a> →
+          </p>
+        </section>
+      </div>
 
-    <main>
-      <!-- Hero -->
-      <section class="hero">
-        <h1 class="hero__claim">Design for complex B2B SaaS products.</h1>
-        <p class="hero__body">
-          Applied Context is the micro-studio of designer
-          <span class="em">Thomas Poblete</span>.
-        </p>
-        <p class="hero__body">
-          I support tech organizations across Product Discovery,
-          Product Design, and Design Leadership.
-        </p>
-      </section>
+      <div class="sections">
+        <div class="sep" aria-hidden="true"></div>
+        <section id="stories" aria-label="Stories">
+          <div class="table">
+            {stories.map((s, i) => {
+              const num = `1.${i + 1}`;
+              const dim = !s.data.active;
+              // Only published, active stories get a link; the row itself
+              // is always an inert <div>, so hover/click land on the
+              // title text alone, not the whole row. The inner <a> is
+              // still a real, crawlable route; data-open-story opens the
+              // in-page modal on a plain click (see the script) while
+              // cmd/middle-click still gets the real page.
+              const linked = s.data.active && !s.data.draft;
+              return (
+                <div
+                  class={`table__row reveal-item${dim ? " table__row--dim" : ""}`}
+                  style={`--i: ${i + 3}`}
+                  data-dim={dim ? "true" : undefined}
+                >
+                  <p class="table__num">{num}</p>
+                  <p class="table__title">
+                    {linked
+                      ? <a class="table__link" href={`/stories/${s.id}/`} data-open-story={s.id}>{s.data.title}</a>
+                      : s.data.title}
+                  </p>
+                  {dim && <span class="table__soon">Soon</span>}
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
-      <!-- Marquee -->
-      <section class="marquee" aria-label="Selected work">
-        <div class="marquee__row">
-          <div class="marquee__track">
-            {[0, 1].map(() => (
-              <div class="marquee__set">
-                {rowA.map((t) => (
-                  <span class="tile" style={`--w:${t.w};--h:${t.h}`}>
-                    <img src={t.src} alt="" loading="lazy" onerror="this.remove()" />
-                  </span>
-                ))}
+        <div class="sep" aria-hidden="true"></div>
+        <section class="row" aria-label="About">
+          <h2 class="row__label reveal-item" style="--i: 0">Background</h2>
+          <div class="about">
+            {about.map((item, i) => (
+              <div
+                class="about__row reveal-item"
+                style={`--i: ${i + 1}`}
+                data-photos={item.photos.length > 0 ? JSON.stringify(item.photos) : undefined}
+              >
+                <p class="about__title">
+                  {item.badge && <span class="about__badge">{item.badge}</span>}
+                  {item.role} •{" "}
+                  {item.url
+                    ? <a class="u" href={item.url} target="_blank" rel="noopener noreferrer">{item.org}</a>
+                    : <span class="u">{item.org}</span>}
+                </p>
+                {item.stats && <p class="about__desc">{item.stats}</p>}
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
-        <div class="marquee__row">
-          <div class="marquee__track marquee__track--rev">
-            {[0, 1].map(() => (
-              <div class="marquee__set">
-                {rowB.map((t) => (
-                  <span class="tile" style={`--w:${t.w};--h:${t.h}`}>
-                    <img src={t.src} alt="" loading="lazy" onerror="this.remove()" />
-                  </span>
-                ))}
+        <div class="sep" aria-hidden="true"></div>
+        <section class="row row--bookmarks" aria-label="Bookmarks">
+          <h2 class="row__label reveal-item" style="--i: 0">Bookmarks</h2>
+          <div class="bookmarks">
+            {bookmarks.map((b, i) => (
+              b.url ? (
+                <a class="bookmarks__item reveal-item" style={`--i: ${i + 1}`} href={b.url} target="_blank" rel="noopener noreferrer">
+                  <span class="u">{b.title}</span>
+                </a>
+              ) : (
+                <span class="bookmarks__item reveal-item" style={`--i: ${i + 1}`}>
+                  <span class="u">{b.title}</span>
+                </span>
+              )
+            ))}
+          </div>
+        </section>
+
+        <div class="sep" aria-hidden="true"></div>
+        <section class="testimonials-section" aria-label="Testimonials">
+          <div class="testimonials reveal-item" style="--i: 0">
+            {testimonials.map((t, i) => (
+              <div class="testimonial" data-testimonial hidden={i !== 0}>
+                <p class="testimonial__text">
+                  <span class="testimonial__name">{t.name}, {t.role}, {t.org}</span>
+                  <br />
+                  <span class="testimonial__quote">{t.quote}</span> {testimonials.length > 1 && <span class="u testimonial__next">Next</span>}
+                </p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
+    </div>
+  </div>
 
-      <!-- Projects -->
-      <section class="projects">
-        <span class="dot dot--anchor" aria-hidden="true"></span>
-        <ul>
-          {projects.map((p) => (
-            <li class="project">
-              <h2 class="project__title">
-                <span class="em">{p.name}</span> — {p.title}
-              </h2>
-              <p class="project__line">{p.line}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </main>
-
-    <footer class="contact">
-      <span class="contact__lead">Let's chat</span>
-      <a href="#">Calendly</a>
-      <a href="https://www.linkedin.com/">LinkedIn</a>
-      <a href="mailto:thomas.pob@gmail.com">Email</a>
+    <footer class="navbar">
+      <span class="navbar__lead">Let’s chat</span>
+      <a href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer">LinkedIn</a>
+      <button
+        type="button"
+        id="mail-btn"
+        class="mailbtn"
+        data-u={MAIL_USER}
+        data-h={MAIL_HOST}
+      >
+        <span id="mail-label">Email</span>
+      </button>
+      <span class="visually-hidden" role="status" aria-live="polite" id="mail-status"></span>
     </footer>
   </div>
+
+  <!-- Fixed image rail. Pinned to the viewport (not the page), so it
+       stays put while the left column scrolls past it — kept visible
+       purely for its own border-left, reading as the content column's
+       right edge (mirrors .strip's own border on the left). Hidden
+       below 1152px, where it'd have no room left — see the @media
+       rule near its own CSS. The "right panel" hover-photo idea this
+       used to also serve is shelved for now in favor of
+       .about__hover-photo below — the script no longer fills this, so
+       .side-rail__stack just stays empty. -->
+  <aside class="side-rail" aria-hidden="true">
+    <div class="side-rail__stack"></div>
+  </aside>
+
+  <!-- Content-width easter egg — a widened, invisible-until-hovered hit
+       zone straddling .side-rail's own border-left (i.e. the content
+       column's visual right edge). Dragging (or arrow keys, as a real
+       slider) live-adjusts --content-max, which .content's max-width
+       and .side-rail's own width both already key off — so both
+       follow for free, no other code needs to know this exists. Own
+       element rather than a pseudo-element on .side-rail so :hover
+       can highlight just this thin strip, not the whole (mostly
+       empty) rail. Same 1152px cutoff as .side-rail itself (see its
+       own comment) — no point offering a drag handle for a rail
+       that isn't there. role="slider" with aria-value* kept in sync
+       by the script below, not hardcoded here — the initial value
+       depends on a possible localStorage restore that only the
+       script can do. -->
+  <div
+    class="content-resizer"
+    role="slider"
+    tabindex="0"
+    aria-label="Content column width"
+    aria-orientation="horizontal"
+  ></div>
+
+  <!-- Hover photo — floats a single image near the cursor, filled and
+       positioned by the script below whenever an about__row with a
+       data-photos list is hovered. Always on, any viewport width. -->
+  <div class="about__hover-photo" aria-hidden="true"></div>
+
+  <!-- Story detail page — two independent fixed elements, not one
+       nested inside the other: #story-peek is a 72px sliver right
+       after the strip showing whatever's actually behind it (dimmed
+       under a translucent white wash, "a 2nd banner"); #story-modal
+       is the page itself, everything from there to the right edge —
+       there's no separate "panel" wrapper, this element IS the
+       sliding page. Together they read as the previous page peeking
+       out from under the new one sliding in over it from the right
+       (see the script/CSS for the slide-in). Scrolls itself —
+       deliberately decoupled from the real page's scroll, see the
+       CSS for why — so its scrollbar lands at the true right edge of
+       the viewport rather than the content column's own edge. One
+       shared page for every
+       story that has a `detail` payload, rather than one per story —
+       .story-modal__body panels sit stacked inside it and the script
+       below shows the one matching the clicked row's data-open-story
+       slug, same "one shared element, swap what's in it" approach as
+       the side rail above. data-open toggles display:none on/off;
+       data-visible (set a frame later) drives the actual slide-in
+       transition, so opening always animates in rather than
+       snapping. -->
+  <button class="story-peek" id="story-peek" type="button" aria-label="Close" data-modal-close data-open="false" data-visible="false"></button>
+
+  <!-- No top-right × close button — closing happens via #story-peek
+       (click the sliver of the real page), #story-actions-close
+       (Close [Esc] in the rail), or Escape itself. One fewer redundant
+       control. -->
+
+  <!-- Floating action rail — same fixed-band trick as #story-peek above
+       (independent element, not nested in #story-modal, so it isn't
+       swept up in the modal's own transform/stacking context), pinned
+       in that same 72px peek column but bottom-anchored rather than
+       full-height. z-index 32 (above the modal's 30 and close button's
+       31) so its hover tooltips, which spill rightward over the modal's
+       content column, always render on top of it. -->
+  <div class="story-actions" id="story-actions" role="group" aria-label="Story navigation" data-open="false" data-visible="false">
+    <button type="button" class="story-actions__btn" id="story-next" aria-label="Next story">
+      <svg class="story-actions__icon" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+        <path d="M8.33333 20H31.6667" />
+        <path d="M20 8.33333L31.6667 20L20 31.6667" />
+      </svg>
+      <span class="story-actions__tip">Next story [<span class="story-actions__glyph">&rarr;</span>]</span>
+    </button>
+    <button type="button" class="story-actions__btn" id="story-copy" aria-label="Copy link to this story">
+      <svg class="story-actions__icon story-actions__icon--link" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
+        <path d="M15 19.5C15.6442 20.3612 16.466 21.0738 17.4098 21.5894C18.3536 22.105 19.3973 22.4117 20.47 22.4885C21.5427 22.5653 22.6194 22.4106 23.627 22.0347C24.6347 21.6588 25.5497 21.0706 26.31 20.31L30.81 15.81C32.1762 14.3955 32.9321 12.501 32.9151 10.5345C32.898 8.56801 32.1092 6.68692 30.7186 5.29636C29.3281 3.9058 27.447 3.11703 25.4805 3.09994C23.514 3.08286 21.6195 3.83881 20.205 5.205L17.625 7.77" />
+        <path d="M21 16.5C20.3558 15.6388 19.534 14.9262 18.5902 14.4106C17.6464 13.895 16.6027 13.5883 15.53 13.5115C14.4573 13.4347 13.3806 13.5894 12.373 13.9653C11.3653 14.3412 10.4503 14.9294 9.69 15.69L5.19 20.19C3.82381 21.6045 3.06786 23.499 3.08494 25.4655C3.10203 27.432 3.8908 29.3131 5.28136 30.7036C6.67192 32.0942 8.55301 32.883 10.5195 32.9001C12.486 32.9171 14.3805 32.1612 15.795 30.795L18.36 28.23" />
+      </svg>
+      <span class="story-actions__tip">Copy link [L]</span>
+    </button>
+    <button type="button" class="story-actions__btn" id="story-actions-close" aria-label="Close" data-modal-close>
+      <svg class="story-actions__icon" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+        <path d="M30 10L10 30" />
+        <path d="M10 10L30 30" />
+      </svg>
+      <span class="story-actions__tip">Close [Esc]</span>
+    </button>
+  </div>
+
+  <div class="story-modal" id="story-modal" role="dialog" aria-modal="true" tabindex="-1" data-open="false" data-visible="false">
+    <div class="story-modal__scroll">
+      {detailStories.map((s) => (
+        <article class="story-modal__body" data-story={s.slug} hidden>
+          {s.story ? (
+            <>
+              <p class="story-modal__title" id={`story-modal-heading-${s.slug}`}>{s.story.title}</p>
+              {s.story.attributes.length > 0 && (
+                <dl class="story-modal__attrs">
+                  {s.story.attributes.map(([label, value]) => (
+                    <div class="story-modal__attr">
+                      <dt>{label}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              {s.story.blocks.map((block) => {
+                switch (block.type) {
+                  case "heading":
+                    return <p class="story-modal__heading em">{block.text}</p>;
+                  case "paragraph":
+                    return <p class="story-modal__p">{block.text}</p>;
+                  case "list":
+                    return (
+                      <ul class="story-modal__list">
+                        {block.items.map((item) => <li>{item}</li>)}
+                      </ul>
+                    );
+                  case "quote":
+                    return (
+                      <div class="story-modal__quote">
+                        <p class="story-modal__quote-text">{block.text}</p>
+                      </div>
+                    );
+                  case "image":
+                    return (
+                      <div class={`story-modal__image story-modal__image--${block.variant}`}>
+                        <img src={block.src} alt={block.alt} loading="lazy" />
+                        {block.caption && <p class="story-modal__caption">{block.caption}</p>}
+                      </div>
+                    );
+                  default:
+                    return null;
+                }
+              })}
+            </>
+          ) : (
+            <>
+              {s.detail.headline && (
+                <p class="story-modal__title" id={`story-modal-heading-${s.slug}`}>
+                  <span class="em">{s.detail.eyebrow}</span>{s.detail.headline}
+                </p>
+              )}
+              {s.detail.lede && <p class="story-modal__lede">{s.detail.lede}</p>}
+              {s.detail.sections.map((sec) => (
+                <section class="story-modal__section">
+                  {sec.heading && <h3 class="story-modal__section-title em">{sec.heading}</h3>}
+                  {sec.paragraphs?.map((p) => <p class="story-modal__p">{p}</p>)}
+                  {sec.bullets?.map((b) => <p class="story-modal__p">{b}</p>)}
+                  {sec.images && sec.images.length > 0 && (
+                    <div class="story-modal__gallery">
+                      {sec.images.map((img) => (
+                        <div class="story-modal__cell" style={`--cell-col: ${img.col}; --cell-bg: ${img.color};`} data-cell-tip={img.tip}>
+                          <div class="story-modal__cell-inner">
+                            <img src={img.file} alt={img.name} loading="lazy" />
+                          </div>
+                        </div>
+                      ))}
+                      <span class="story-modal__cell-tip"></span>
+                    </div>
+                  )}
+                </section>
+              ))}
+            </>
+          )}
+        </article>
+      ))}
+    </div>
+  </div>
+
+  <script is:inline>
+    // Plain page load — no client-side router here (real full-page
+    // navigation to /stories/[slug]/ and back), so this script tag
+    // runs fresh exactly once per document and everything below can
+    // sit at the top level.
+    let clockIntervalId;
+    let modalKeydownHandler;
+
+    // The masthead clocks are live rather than baked, otherwise they
+    // freeze at build time and quietly become wrong.
+    (function () {
+      const pairs = [
+        ["clk-yul", "America/Toronto"],
+        ["clk-par", "Europe/Paris"],
+      ];
+      function tick() {
+        for (const [id, tz] of pairs) {
+          const el = document.getElementById(id);
+          if (!el) continue;
+          el.textContent = new Intl.DateTimeFormat("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+            timeZone: tz,
+          }).format(new Date());
+        }
+      }
+      tick();
+      // clockIntervalId is declared outside this IIFE (see top of the
+      // script) — harmless belt-and-suspenders now that this script
+      // only ever runs once per document, but clearing before
+      // installing costs nothing.
+      clearInterval(clockIntervalId);
+      clockIntervalId = setInterval(tick, 30000);
+    })();
+
+    // Copy-to-clipboard for the email. The address is assembled here
+    // rather than sitting in the markup, so a scraper reading the HTML
+    // source finds nothing to harvest.
+    (function () {
+      const btn = document.getElementById("mail-btn");
+      const label = document.getElementById("mail-label");
+      const status = document.getElementById("mail-status");
+      if (!btn || !label) return;
+
+      let timer;
+      const addr = () => btn.dataset.u + String.fromCharCode(64) + btn.dataset.h;
+
+      function flash(msg, ok) {
+        label.textContent = msg;
+        btn.classList.toggle("is-copied", ok);
+        if (status) status.textContent = ok ? "Email address copied" : msg;
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          label.textContent = "Email";
+          btn.classList.remove("is-copied");
+        }, 2200);
+      }
+
+      btn.addEventListener("click", async () => {
+        const value = addr();
+        try {
+          await navigator.clipboard.writeText(value);
+          flash("Copied ✓", true);
+        } catch (err) {
+          // Clipboard API needs https or localhost; fall back to
+          // showing the address so it can still be selected by hand.
+          flash(value, false);
+        }
+      });
+    })();
+
+    // Reveal each top-level section with a quick fade+rise as it enters
+    // view (and the hero immediately on load, since it starts already
+    // in view). Runs once per section — no re-trigger on scrolling back
+    // up. Sections render pre-revealed if JS never runs, so nothing is
+    // ever permanently hidden. Hero and Stories are both in view at
+    // load (unlike every section below the fold, which the user only
+    // ever scrolls to one at a time), so their observers fire together
+    // — their reveal-items share one continuous --i sequence in the
+    // markup (hero: 0-2, stories: 3-5) rather than each restarting at
+    // 0, so the two read as one cascade instead of two competing ones
+    // animating in the same instant.
+    (function () {
+      // :is(.intro, .sections) — same pairing as the matching CSS
+      // selector above (see its own comment): .hero lives in .intro
+      // now, not .sections, but still reveals the same way.
+      const sections = document.querySelectorAll(":is(.intro, .sections) > section");
+      if (!("IntersectionObserver" in window)) {
+        sections.forEach((s) => s.classList.add("is-visible"));
+        return;
+      }
+      const io = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+              io.unobserve(entry.target);
+            }
+          }
+        },
+        { threshold: 0.15 }
+      );
+      sections.forEach((s) => io.observe(s));
+    })();
+
+    // Testimonials slider — same leave/enter recipe as the story-modal's
+    // switchStory(): the outgoing slide gets [data-leaving] (CSS
+    // transitions it off), then after that transition's duration the
+    // hidden attributes actually swap and the incoming slide gets
+    // [data-entering] (its off-rest position, painted before the attr
+    // is removed next frame so it transitions in from there rather than
+    // snapping to rest — the 320ms timeout below matches the CSS
+    // transition-duration, see .testimonial). Click is delegated on the
+    // whole .testimonial block — name and quote both — not just the
+    // quote text, so hovering or clicking the name also advances the
+    // slider; the "Next" span is purely visual, not a separate control.
+    // "Next" only renders when there's more than one testimonial (see
+    // the markup), so this never needs to handle a length-1 no-op case.
+    (function () {
+      const slides = Array.from(document.querySelectorAll("[data-testimonial]"));
+      if (slides.length < 2) return;
+      let current = slides.findIndex((s) => !s.hidden);
+      if (current < 0) current = 0;
+      let switching = false;
+      slides.forEach((slide) => {
+        slide.addEventListener("click", () => {
+          if (switching) return;
+          switching = true;
+          const from = slides[current];
+          current = (current + 1) % slides.length;
+          const to = slides[current];
+          from.dataset.leaving = "true";
+          setTimeout(() => {
+            from.hidden = true;
+            delete from.dataset.leaving;
+            to.hidden = false;
+            to.dataset.entering = "true";
+            requestAnimationFrame(() => {
+              delete to.dataset.entering;
+              switching = false;
+            });
+          }, 320);
+        });
+      });
+    })();
+
+    // "Soon" caption position — same recipe as the mockup gallery's
+    // .story-modal__cell-tip: --tip-x/--tip-y are the cursor's position
+    // relative to the row's own top-left corner (the row is the
+    // position:relative anchor, see its CSS), read by the caption's
+    // transform via calc(). Visibility itself is plain CSS (:hover),
+    // this only ever needs to move the caption while it's shown.
+    document.querySelectorAll('.table__row[data-dim="true"]').forEach((row) => {
+      row.addEventListener("mousemove", (e) => {
+        const rect = row.getBoundingClientRect();
+        row.style.setProperty("--tip-x", `${e.clientX - rect.left}px`);
+        row.style.setProperty("--tip-y", `${e.clientY - rect.top}px`);
+      });
+    });
+
+    // About row hover photos — hovering an about__row that carries a
+    // data-photos list floats its first photo near the cursor
+    // (.about__hover-photo), flipping above/below it depending on
+    // which half of the viewport the cursor is in so it never runs off
+    // top or bottom. Always on, any viewport width — the side rail
+    // this used to swap with below 1152px (the "right panel" idea,
+    // .side-rail/.side-rail__stack — still in the CSS, just unused and
+    // display:none for now) is shelved, not deleted, in case it's
+    // worth coming back to.
+    (function () {
+      const floater = document.querySelector(".about__hover-photo");
+      const rows = document.querySelectorAll(".about__row[data-photos]");
+      if (!floater || rows.length === 0) return;
+
+      function hide() {
+        floater.classList.remove("is-visible");
+      }
+
+      rows.forEach((row) => {
+        let photos;
+        try {
+          photos = JSON.parse(row.dataset.photos);
+        } catch {
+          return;
+        }
+        if (!Array.isArray(photos) || photos.length === 0) return;
+
+        // Bind to the org name (.about__title .u — link or plain span),
+        // not the whole row, so the floating photo only appears while
+        // the pointer is over that word.
+        const target = row.querySelector(".about__title .u") || row;
+
+        target.addEventListener("mouseenter", () => {
+          floater.innerHTML = "";
+          const photo = document.createElement("img");
+          photo.alt = "";
+          photo.src = `/shots/about/${encodeURIComponent(photos[0])}`;
+          floater.appendChild(photo);
+          floater.classList.add("is-visible");
+        });
+        target.addEventListener("mouseleave", hide);
+        target.addEventListener("mousemove", (e) => {
+          floater.classList.toggle("is-above", e.clientY > window.innerHeight / 2);
+          floater.style.setProperty("--tip-x", `${e.clientX}px`);
+          floater.style.setProperty("--tip-y", `${e.clientY}px`);
+        });
+      });
+    })();
+
+    // Content-width easter egg — drags (or arrow-keys) --content-max
+    // live via the .content-resizer handle straddling .side-rail's
+    // border-left. Both .content's max-width and .side-rail's own
+    // width already read that one variable (see their own CSS), so
+    // setting it here is the whole story — nothing downstream needs
+    // touching. Persisted per-visitor in localStorage, re-clamped on
+    // restore in case the viewport is narrower now than when it was
+    // saved (e.g. saved on a wide monitor, revisited on a laptop).
+    //
+    // DISABLED for now (see the matching DISABLED note on
+    // .content-resizer's own CSS) — flip ENABLED back to true, and
+    // remove that CSS override, to bring it back. Left fully intact
+    // rather than deleted since it's meant to come back.
+    (function () {
+      const ENABLED = false;
+      if (!ENABLED) return;
+
+      const handle = document.querySelector(".content-resizer");
+      const sideRail = document.querySelector(".side-rail");
+      if (!handle || !sideRail) return;
+
+      const STORAGE_KEY = "poblete:content-max";
+      const MIN = 640; // narrower and the text column inside starts feeling cramped
+      const RAIL_MIN = 24; // never let .side-rail collapse to a sliver
+      const STEP = 24; // per arrow-key press
+      const BIG_STEP = 96; // per Page Up/Down
+      const HANDLE_HALF = 12; // half of .content-resizer's own 24px width
+
+      function stripWidth() {
+        const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--strip"));
+        return Number.isFinite(v) ? v : 72;
+      }
+
+      function current() {
+        const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--content-max"));
+        return Number.isFinite(v) ? v : 1080;
+      }
+
+      function clamp(value) {
+        const max = Math.max(MIN, window.innerWidth - stripWidth() - RAIL_MIN);
+        return Math.min(Math.max(value, MIN), max);
+      }
+
+      // Reads .side-rail's own rendered position rather than
+      // recomputing it from --strip/--content-max (see the CSS
+      // comment on .content-resizer for why the two can disagree) —
+      // whatever quirk of this browser's own placed .side-rail, this
+      // lines the handle up with it exactly, every time.
+      function syncHandlePosition() {
+        handle.style.left = `${sideRail.getBoundingClientRect().left - HANDLE_HALF}px`;
+      }
+
+      function apply(value) {
+        const clamped = clamp(value);
+        document.documentElement.style.setProperty("--content-max", `${clamped}px`);
+        handle.setAttribute("aria-valuemin", String(MIN));
+        handle.setAttribute("aria-valuemax", String(clamp(Number.MAX_SAFE_INTEGER)));
+        handle.setAttribute("aria-valuenow", String(Math.round(clamped)));
+        syncHandlePosition();
+        return clamped;
+      }
+
+      function persist(value) {
+        try {
+          localStorage.setItem(STORAGE_KEY, String(value));
+        } catch {
+          // Private browsing / storage disabled — the drag/keyboard
+          // adjustment itself still works for the rest of this visit,
+          // it just won't be remembered next time.
+        }
+      }
+
+      // Restore a saved width, re-clamped for the current viewport —
+      // otherwise just reflect whatever the CSS default already is,
+      // so the aria-value* attributes are correct from the start.
+      let width;
+      try {
+        const saved = parseFloat(localStorage.getItem(STORAGE_KEY));
+        width = Number.isFinite(saved) ? apply(saved) : apply(current());
+      } catch {
+        width = apply(current());
+      }
+
+      let dragStartX = 0;
+      let dragStartWidth = width;
+
+      handle.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        dragStartX = e.clientX;
+        dragStartWidth = current();
+        handle.setPointerCapture(e.pointerId);
+        handle.classList.add("is-dragging");
+        document.documentElement.classList.add("resizing-content");
+      });
+
+      handle.addEventListener("pointermove", (e) => {
+        if (!handle.classList.contains("is-dragging")) return;
+        width = apply(dragStartWidth + (e.clientX - dragStartX));
+      });
+
+      function stopDrag(e) {
+        if (!handle.classList.contains("is-dragging")) return;
+        handle.classList.remove("is-dragging");
+        document.documentElement.classList.remove("resizing-content");
+        handle.releasePointerCapture(e.pointerId);
+        persist(width);
+      }
+      handle.addEventListener("pointerup", stopDrag);
+      handle.addEventListener("pointercancel", stopDrag);
+
+      // Arrow-key stepping — a drag handle with no keyboard equivalent
+      // isn't actually usable via keyboard, just decorative for it.
+      handle.addEventListener("keydown", (e) => {
+        let next = null;
+        if (e.key === "ArrowLeft") next = current() - STEP;
+        else if (e.key === "ArrowRight") next = current() + STEP;
+        else if (e.key === "PageDown") next = current() - BIG_STEP;
+        else if (e.key === "PageUp") next = current() + BIG_STEP;
+        else if (e.key === "Home") next = MIN;
+        else if (e.key === "End") next = clamp(Number.MAX_SAFE_INTEGER);
+        if (next === null) return;
+        e.preventDefault();
+        width = apply(next);
+        persist(width);
+      });
+
+      // The saved width was for whatever viewport it was saved at —
+      // re-clamp (not re-save) on resize so a since-narrowed window
+      // doesn't leave .side-rail collapsed or .content overflowing,
+      // without overwriting the wider, still-preferred saved value.
+      window.addEventListener("resize", () => {
+        width = apply(current());
+      });
+    })();
+
+    // Story detail page — opens on a table__row that carries
+    // data-open-story, closes on the × button or Escape (no backdrop
+    // to click — the page behind is inert while this is open, not
+    // dimmed-but-clickable). Only one .story-modal__body is un-hidden
+    // at a time; the rest stay `hidden` so the closed page never
+    // announces content for a different story to assistive tech.
+    // The real page's scroll position is never touched — html.modal-
+    // open locks it, so #story-peek keeps showing the exact same
+    // frozen sliver of the real page the whole time this is open,
+    // rather than scrolling along with the story (see CSS). #story-
+    // modal has its own independent scroll instead.
+    // #story-peek and #story-modal are independent elements (not
+    // nested — a transformed #story-modal would otherwise become the
+    // containing block for any position:fixed descendant, dragging it
+    // along on scroll instead of staying put), so their data-open/
+    // data-visible are set in lockstep here rather than either
+    // inheriting state via CSS descent.
+    (function () {
+      const modal = document.getElementById("story-modal");
+      if (!modal) return;
+      const actions = document.getElementById("story-actions");
+      const layers = [modal, document.getElementById("story-peek"), actions].filter(Boolean);
+      const bodies = modal.querySelectorAll(".story-modal__body");
+      const triggers = document.querySelectorAll("[data-open-story]");
+      if (triggers.length === 0 || bodies.length === 0) return;
+
+      // Every story with a detail payload, in the same order they're
+      // defined in — what the next-story action and its ↻-wraparound
+      // cycle through.
+      const storySlugs = Array.from(bodies).map((b) => b.dataset.story);
+
+      // Everything that isn't the story page itself — made inert
+      // (unfocusable, unclickable) while a story is open, since it's
+      // either fully covered or only visible dimmed through
+      // #story-peek.
+      const background = [
+        document.querySelector(".shell"),
+        document.querySelector(".side-rail"),
+        document.querySelector(".navbar"),
+      ].filter(Boolean);
+
+      let lastFocused = null;
+      let closeTimer;
+      let currentSlug = null;
+
+      function slugFromHash() {
+        const m = location.hash.match(/^#story=(.+)$/);
+        return m ? decodeURIComponent(m[1]) : null;
+      }
+
+      function open(slug) {
+        let matched = null;
+        bodies.forEach((b) => {
+          const isMatch = b.dataset.story === slug;
+          b.hidden = !isMatch;
+          if (isMatch) matched = b;
+        });
+        if (!matched) return;
+
+        currentSlug = slug;
+        history.replaceState(null, "", `#story=${encodeURIComponent(slug)}`);
+        clearTimeout(closeTimer);
+        lastFocused = document.activeElement;
+        background.forEach((el) => el.setAttribute("inert", ""));
+        layers.forEach((el) => { el.dataset.open = "true"; });
+        document.documentElement.classList.add("modal-open");
+        const heading = matched.querySelector(".story-modal__title");
+        if (heading) modal.setAttribute("aria-labelledby", heading.id);
+        modal.scrollTop = 0;
+        // Set on the next frame so the page has already painted in
+        // its closed state — otherwise the browser coalesces both
+        // style changes into one frame and the transition never runs.
+        requestAnimationFrame(() => {
+          layers.forEach((el) => { el.dataset.visible = "true"; });
+        });
+        modal.focus();
+      }
+
+      function close() {
+        currentSlug = null;
+        history.replaceState(null, "", location.pathname + location.search);
+        layers.forEach((el) => { el.dataset.visible = "false"; });
+        background.forEach((el) => el.removeAttribute("inert"));
+        document.documentElement.classList.remove("modal-open");
+        clearTimeout(closeTimer);
+        closeTimer = setTimeout(() => {
+          layers.forEach((el) => { el.dataset.open = "false"; });
+        }, 240);
+        if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus();
+      }
+
+      // Switching between two already-open stories (next/prev) gets its
+      // own transition — a push in the direction of travel — distinct
+      // from open()'s slide-in-from-closed, since there's no "closed"
+      // state to animate from here. direction: 1 = next (old exits
+      // left, new enters from the right), -1 = prev (reversed).
+      let switchTimer;
+      function switchStory(slug, direction) {
+        const nextBody = Array.from(bodies).find((b) => b.dataset.story === slug);
+        const prevBody = modal.querySelector(".story-modal__body:not([hidden])");
+        if (!nextBody || !prevBody || nextBody === prevBody) {
+          open(slug);
+          return;
+        }
+
+        currentSlug = slug;
+        history.replaceState(null, "", `#story=${encodeURIComponent(slug)}`);
+
+        clearTimeout(switchTimer);
+        prevBody.dataset.leaving = direction > 0 ? "left" : "right";
+        switchTimer = setTimeout(() => {
+          prevBody.hidden = true;
+          delete prevBody.dataset.leaving;
+          nextBody.hidden = false;
+          nextBody.dataset.entering = direction > 0 ? "right" : "left";
+          modal.scrollTop = 0;
+          const heading = nextBody.querySelector(".story-modal__title");
+          if (heading) modal.setAttribute("aria-labelledby", heading.id);
+          // Next frame so the entering position paints before it
+          // transitions to rest — same reason open() defers data-visible.
+          requestAnimationFrame(() => {
+            delete nextBody.dataset.entering;
+          });
+        }, 180);
+      }
+
+      function goNext() {
+        if (!currentSlug || storySlugs.length === 0) return;
+        const idx = storySlugs.indexOf(currentSlug);
+        switchStory(storySlugs[(idx + 1) % storySlugs.length], 1);
+      }
+
+      // Previous story — keyboard-only (←), no button in the rail.
+      function goPrev() {
+        if (!currentSlug || storySlugs.length === 0) return;
+        const idx = storySlugs.indexOf(currentSlug);
+        switchStory(storySlugs[(idx - 1 + storySlugs.length) % storySlugs.length], -1);
+      }
+
+      // Copy-to-clipboard for the currently open story, same
+      // borrow-the-tooltip-as-feedback approach as the mail button's
+      // flash() — swap its label to a confirmation, then restore.
+      const copyBtn = document.getElementById("story-copy");
+      const copyTip = copyBtn ? copyBtn.querySelector(".story-actions__tip") : null;
+      const copyTipDefault = copyTip ? copyTip.innerHTML : "";
+      let copyTimer;
+
+      async function copyLink() {
+        if (!currentSlug) return;
+        // Published stories have a real, direct-link route (see
+        // stories/[slug].astro) — copy that instead of the #story=
+        // hash whenever one exists, reading it straight off the same
+        // trigger <a>'s href rather than re-deriving it, so there's
+        // only one place that URL is ever constructed. Falls back to
+        // the hash scheme for "mockups", which has no route of its
+        // own to link to.
+        const realLink = document.querySelector(`a[data-open-story="${currentSlug}"]`);
+        const url = realLink
+          ? new URL(realLink.getAttribute("href"), location.origin).href
+          : `${location.origin}${location.pathname}#story=${encodeURIComponent(currentSlug)}`;
+        try {
+          await navigator.clipboard.writeText(url);
+          if (copyTip) copyTip.textContent = "Copied ✓";
+        } catch {
+          // Clipboard API needs https or localhost; fall back to
+          // showing the address so it can still be selected by hand.
+          if (copyTip) copyTip.textContent = url;
+        }
+        // Force the tooltip visible for a few seconds — triggering via
+        // the L shortcut means the mouse likely isn't hovering the
+        // button, so :hover alone would never surface this feedback.
+        copyTip?.classList.add("is-shown");
+        clearTimeout(copyTimer);
+        copyTimer = setTimeout(() => {
+          copyTip?.classList.remove("is-shown");
+          if (copyTip) copyTip.innerHTML = copyTipDefault;
+        }, 2200);
+      }
+
+      triggers.forEach((t) => {
+        t.addEventListener("click", (e) => {
+          // Story rows are real <a href="/stories/..."> links (see
+          // index.astro's table markup) — data-open-story on the same
+          // element additionally opens the modal on a plain click, but
+          // a modified click (cmd/ctrl/shift/alt, or a non-primary
+          // button — new tab, new window, etc.) should still behave
+          // like the real link it is, not get hijacked into the
+          // modal. Doesn't apply to the mockups trigger, an hrefless
+          // <a role="button"> with nothing to open elsewhere anyway.
+          if (t.getAttribute("href") && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)) return;
+          e.preventDefault();
+          open(t.dataset.openStory);
+        });
+        // Hrefless triggers (the mockups <a role="button">) don't get
+        // native Enter/Space activation the way a real link does.
+        if (!t.getAttribute("href")) {
+          t.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              open(t.dataset.openStory);
+            }
+          });
+        }
+      });
+      // Gallery hover caption: one shared tooltip per gallery (see
+      // .story-modal__cell-tip) that tracks the cursor rather than a
+      // per-cell one, specifically so it stays visible moving from one
+      // mockup to the next. mouseenter/mouseleave don't bubble and
+      // don't re-fire for moves between a container's own children —
+      // only entering/leaving the gallery itself toggles .is-visible —
+      // which is what keeps it up crossing the gaps between cells.
+      // --tip-x/--tip-y are the cursor's position relative to the
+      // gallery's own top-left corner; the CSS transform adds the
+      // +16px lead so the tip trails just past the pointer. Text swaps
+      // per cell via delegated mouseover (which does bubble) reading
+      // each cell's own data-cell-tip — crossing a gap between cells
+      // just leaves the last cell's text up until the next one is
+      // entered, same "stays up" behavior as the position tracking.
+      modal.querySelectorAll(".story-modal__gallery").forEach((gallery) => {
+        const tip = gallery.querySelector(".story-modal__cell-tip");
+        if (!tip) return;
+        gallery.addEventListener("mouseenter", () => tip.classList.add("is-visible"));
+        gallery.addEventListener("mouseleave", () => tip.classList.remove("is-visible"));
+        gallery.addEventListener("mousemove", (e) => {
+          const rect = gallery.getBoundingClientRect();
+          gallery.style.setProperty("--tip-x", `${e.clientX - rect.left}px`);
+          gallery.style.setProperty("--tip-y", `${e.clientY - rect.top}px`);
+        });
+        gallery.addEventListener("mouseover", (e) => {
+          const cell = e.target.closest(".story-modal__cell");
+          if (cell) tip.textContent = cell.dataset.cellTip || "";
+        });
+      });
+      // Not modal.querySelectorAll — #story-peek and #story-actions-close
+      // live outside #story-modal (see the markup comment for why).
+      document.querySelectorAll("[data-modal-close]").forEach((el) => {
+        el.addEventListener("click", close);
+      });
+      document.getElementById("story-next")?.addEventListener("click", goNext);
+      copyBtn?.addEventListener("click", copyLink);
+
+      // modalKeydownHandler is declared outside this IIFE (see top of
+      // the script) — same belt-and-suspenders as clockIntervalId
+      // above, harmless now that this only runs once per document.
+      if (modalKeydownHandler) document.removeEventListener("keydown", modalKeydownHandler);
+      modalKeydownHandler = (e) => {
+        if (modal.dataset.open !== "true" || e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.key === "Escape") close();
+        else if (e.key === "ArrowRight") { e.preventDefault(); goNext(); }
+        else if (e.key === "ArrowLeft") { e.preventDefault(); goPrev(); }
+        else if (e.key === "l" || e.key === "L") { e.preventDefault(); copyLink(); }
+      };
+      document.addEventListener("keydown", modalKeydownHandler);
+
+      // Deep link: a copied #story=<slug> URL opens straight to that
+      // story on load, same list this closes the loop with above.
+      const initialSlug = slugFromHash();
+      if (initialSlug && storySlugs.includes(initialSlug)) open(initialSlug);
+    })();
+
+    // Hero headline word rotation — "complex" retypes itself as each
+    // of these in turn, forever. Currently DISCONNECTED: the hero
+    // markup has no #hero-rotate element (reverted — felt like too
+    // much motion for the hero), so this just no-ops below. To turn
+    // it back on, wrap "complex" in the h1 with
+    // <span id="hero-rotate" class="hero__rotate">complex</span>.
+    // Edit ROTATE_WORDS and the four speeds below to tune it; if you
+    // add a word longer than "operational" (11 characters), also
+    // bump .hero__rotate's min-width in the CSS so the line stops
+    // reflowing.
+    (function () {
+      const ROTATE_WORDS = ["complex", "operational", "industrial", "AI"];
+      const TYPE_SPEED_MS = 70;    // per character, typing a word in
+      const DELETE_SPEED_MS = 40;  // per character, deleting a word
+      const PAUSE_MS = 1800;       // how long a finished word sits before it deletes
+      const START_DELAY_MS = 2000; // how long the initial "complex" sits before the cycle starts
+
+      const el = document.getElementById("hero-rotate");
+      if (!el) return;
+
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        // Keep the word variety, drop the per-character motion.
+        let ri = 0;
+        setInterval(() => {
+          ri = (ri + 1) % ROTATE_WORDS.length;
+          el.textContent = ROTATE_WORDS[ri];
+        }, START_DELAY_MS + PAUSE_MS);
+        return;
+      }
+
+      let i = 0; // index of the word currently on screen (starts on "complex")
+
+      function deleteWord(onDone) {
+        const text = el.textContent;
+        if (text.length === 0) {
+          onDone();
+          return;
+        }
+        el.textContent = text.slice(0, -1);
+        setTimeout(() => deleteWord(onDone), DELETE_SPEED_MS);
+      }
+
+      function typeWord(word, pos, onDone) {
+        el.textContent = word.slice(0, pos);
+        if (pos >= word.length) {
+          onDone();
+          return;
+        }
+        setTimeout(() => typeWord(word, pos + 1, onDone), TYPE_SPEED_MS);
+      }
+
+      function cycle() {
+        i = (i + 1) % ROTATE_WORDS.length;
+        deleteWord(() => {
+          typeWord(ROTATE_WORDS[i], 0, () => {
+            setTimeout(cycle, PAUSE_MS);
+          });
+        });
+      }
+
+      setTimeout(cycle, START_DELAY_MS);
+    })();
+  </script>
 </Base>
 
 <style>
+  /* --- Frame (content card) ----------------------------------- */
+  /* The near-white card the whole site sits on, over the --page-bg
+     backdrop (Figma "Container"). Caps at the 1440 frame width and
+     centres; hairline border + soft left shadow. overflow:clip crops
+     the hero illustration where it bleeds past the top/right edges.
+     Wraps .shell (strip + content) and the footer bar; the fixed
+     overlay elements stay outside it so they anchor to the viewport. */
   .frame {
-    position: relative;
+    width: 100%;
     max-width: var(--frame);
-    margin: 0 auto;
-    background: var(--paper);
-    overflow: hidden;
+    /* Pinned to the left of the viewport, not centred — past the 1440
+       cap the backdrop shows only on the right. */
+    align-self: flex-start;
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    background: var(--paper-card);
+    /* Page reads as left-aligned, so only the right edge needs a
+       rule — it's the divider between the content column and the
+       backdrop, mirroring the strip's own edge on the left. */
+    border-right: 1px solid var(--grey-1);
+    box-shadow: -2px 0 16px 0 rgba(230, 230, 230, 0.3);
+    overflow: clip;
   }
 
-  /* --- Ruled margins ------------------------------------------- */
-  .rule {
+  .shell {
+    display: flex;
+    align-items: stretch;
+    flex: 1 0 auto;
+  }
+
+  /* --- Margin strip -------------------------------------------- */
+  /* .strip/.strip::after/.punch live in Base.astro's global
+     stylesheet, not here — shared with stories/[slug].astro, which
+     renders the identical markup. */
+
+  /* --- Content column ------------------------------------------ */
+  /* Fills the card past the 72px strip (no max-width of its own — the
+     card is the cap now). No padding here: each section under
+     .sections owns its own 72px side padding, so the separator rules
+     between them can span the full column width. position:relative is
+     the containing block for .hero-illo. */
+  .content {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0;
+  }
+
+  /* Isometric line-art, sitting to the right of the hero prose. This
+     is the full-resolution source bitmap (923x1508, transparent) that
+     backs the Figma "illustration" frame (1431:214) — the earlier
+     asset was a 1x frame screenshot, which upscaled soft. Shown ~1.6x
+     downscaled (560 / 923) so it stays crisp on hi-dpi. Whole scene
+     visible, only a small right bleed past the card edge (cropped by
+     .frame's overflow:clip). Behind the prose (z-index 0; .hero is 1);
+     hidden on narrow viewports — see the @media rule. */
+  .hero-illo {
     position: absolute;
     top: 0;
-    bottom: 0;
-    width: 1px;
-    background: var(--accent);
-    z-index: 3;
+    right: -48px;
+    width: 560px;
+    height: auto;
+    z-index: 0;
+    pointer-events: none;
+    user-select: none;
   }
-  .rule--left  { left: var(--rule-left); }
-  .rule--right { right: calc(var(--frame) - var(--rule-right)); }
 
-  .frame::before,
-  .frame::after {
+  /* --- Side rail -------------------------------------------------- */
+  /* DISABLED in the redesign — the content card is now full frame
+     width with no leftover column for a rail, and the hero
+     illustration does the job the rail's border used to (reading as
+     the column's right edge). Kept in the DOM + stylesheet (display:
+     none) rather than deleted, alongside the already-disabled
+     .content-resizer, in case the split layout comes back. */
+  .side-rail {
+    display: none;
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: calc(100vw - var(--strip) - var(--content-max));
+    height: 100vh;
+    /* No padding here on purpose — see .side-rail__stack below for
+       why. Still shown for its own sake — the border-left reads as
+       the main content column's right edge, mirroring .strip's own
+       border on the left — even though .side-rail__stack (the "right
+       panel" hover-photo idea) is unused now and stays empty; see the
+       comment near .about__hover-photo for that. */
+    align-items: center;
+    justify-content: center;
+    border-left: 1px solid var(--grey-1);
+    background: var(--paper);
+    z-index: 1;
+  }
+
+  /* Content-width drag handle — see the markup comment for why this
+     is its own element. Meant to straddle .side-rail's own
+     border-left (the content column's visual right edge) — but its
+     `left` is set from JS (see the script's syncHandlePosition()), not
+     computed here from --strip/--content-max directly. Those two
+     numbers only match .side-rail's actual rendered position if
+     .side-rail's own calc(100vw - strip - content-max) resolves 100vw
+     the same way this file assumes — true in some browsers, off by a
+     scrollbar's width in others (same ambiguity we chased through the
+     story-modal full-bleed bug), so a second, independent formula here
+     silently drifts from the real border in exactly those browsers.
+     Reading .side-rail's own measured rect instead can't drift: it's
+     the same number the border itself is drawn at, whatever that
+     number turns out to be. Kept transparent until hovered/focused/
+     dragging rather than always showing a bar, so it doesn't compete
+     with .side-rail's own border-left for attention the rest of the
+     time. */
+  /* DISABLED for now — matches the script's own ENABLED flag (see its
+     comment). display:none rather than removing the rule: the script
+     already no-ops (never adds listeners, never touches
+     --content-max), this just also keeps the handle from rendering
+     (and from being tab-reachable — role="slider" tabindex="0" would
+     otherwise still land in the tab order for a control that no
+     longer does anything) while it's off. */
+  .content-resizer {
+    display: none;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    /* Fallback for the instant before the script's first
+       syncHandlePosition() runs (and for no-JS, where the handle
+       isn't interactive anyway but shouldn't render at the wrong end
+       of the screen) — the same calc() the script exists to not rely
+       on, close enough for that split second. */
+    left: calc(var(--strip) + var(--content-max) - 12px);
+    width: 24px;
+    z-index: 4;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .content-resizer::after {
     content: "";
     position: absolute;
     top: 0;
     bottom: 0;
-    background: var(--margin);
-    z-index: 2;
+    left: 12px;
+    width: 1px;
+    background: var(--main);
+    opacity: 0;
+    transition: opacity 150ms ease;
   }
-  .frame::before { left: 0; width: var(--rule-left); }
-  .frame::after {
-    right: 0;
-    width: calc(var(--frame) - var(--rule-right));
+  .content-resizer:hover::after,
+  .content-resizer:focus-visible::after,
+  .content-resizer.is-dragging::after {
+    opacity: 1;
+  }
+  .content-resizer:focus-visible {
+    outline: none;
+  }
+  /* Same 1152px cutoff as .side-rail (see its own comment) — the
+     handle straddles a border that isn't rendered past this point. */
+  @media (max-width: 1152px) {
+    .content-resizer { display: none; }
+  }
+  /* Belt-and-suspenders for a fast drag: keeps the resize cursor (and
+     blocks text selection) across the whole page while dragging, so
+     brief moments where the pointer outruns the 24px hit zone don't
+     flicker the cursor back to normal mid-drag. */
+  html.resizing-content,
+  html.resizing-content * {
+    cursor: col-resize !important;
+    user-select: none;
   }
 
-  /* --- Right rail display type --------------------------------- */
-  .rail {
-    position: absolute;
+  /* Hover photo stack, driven by the script below — hidden until an
+     about__row with a data-photos list is hovered, then filled with
+     every photo for that row, stacked vertically. width:60% matches
+     the single-image rail this replaced; each photo keeps that same
+     width with height:auto so mixed aspect ratios aren't distorted.
+     .side-rail centers the stack as a whole (no scroll/clip here),
+     so a stack taller than the viewport just runs off the top and
+     bottom rather than shrinking to fit. */
+  .side-rail__stack {
+    /* pad-x lives here rather than on .side-rail itself — a
+       calc(100vw - …) width combined with border-box padding on the
+       SAME fixed-position element renders wrong once that calc'd
+       width shrinks below the padding's own size (confirmed: the
+       element's rendered width silently collapses to just the
+       padding sum, which visibly yanked this rail's left border
+       leftward at in-between viewport widths, just before the
+       narrow breakpoint hides it entirely). Percentage widths don't
+       trigger it, so the inset moves to this child instead. */
+    box-sizing: border-box;
+    width: 60%;
+    padding: 0 var(--pad-x);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+  .side-rail__stack.is-visible {
+    opacity: 1;
+  }
+  /* :global() — these <img> tags are created client-side (see the
+     script below), so they never get Astro's scoping attribute and a
+     plain scoped ".side-rail__stack img" selector would silently not
+     match them. */
+  .side-rail__stack :global(img) {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+  }
+  /* 1152px = --strip (72) + --content-max (1080): the exact viewport
+     width where the rail's own calculated width (100vw - strip -
+     content-max, above) hits zero — past this point it'd start
+     overlapping the main content column instead of sitting clear of
+     it, so it has to go rather than just staying empty. Deliberately
+     its own breakpoint, wider than (and separate from) the 1024px one
+     further down that hides .strip and wraps the stories table for
+     unrelated reasons. */
+  @media (max-width: 1152px) {
+    .side-rail { display: none; }
+    /* The illustration is anchored to the content column's right edge
+       and 598px wide — below this it starts eating into the hero
+       prose, so drop it rather than let it collide. */
+    .hero-illo { display: none; }
+  }
+  /* Hover photo, floats near the cursor (see the script) — always on,
+     any viewport width, independent of .side-rail above (which just
+     stays empty now — see its own comment — rather than swapping with
+     this depending on width like it used to). Fixed so
+     --tip-x/--tip-y (raw clientX/clientY, set on mousemove) can be
+     used as-is with no rail offset to subtract. Rest position trails
+     +16px below-right of the cursor, same lead as .story-modal__cell-
+     tip; .is-above flips the Y term to -100% - 16px (100% of the
+     photo's own height) so it opens upward instead once the cursor is
+     past the viewport's midline, keeping it on-screen either way. */
+  .about__hover-photo {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 46vw;
+    max-width: 380px;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 5;
+    transition: opacity 150ms ease;
+    transform: translate(calc(var(--tip-x, 0px) + 16px), calc(var(--tip-y, 0px) + 16px));
+  }
+  .about__hover-photo.is-visible { opacity: 1; }
+  .about__hover-photo.is-above {
+    transform: translate(calc(var(--tip-x, 0px) + 16px), calc(var(--tip-y, 0px) - 100% - 16px));
+  }
+  .about__hover-photo :global(img) {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    border: 1px solid var(--grey-1);
+    background: var(--paper);
+  }
+
+  /* --- Story detail page --------------------------------------------- */
+  /* Two independent position:fixed elements, not one nested inside
+     the other — #story-peek and #story-modal just happen to sit side
+     by side. #story-modal IS the page: no separate "panel" wrapper,
+     this element itself carries the background, border, and the
+     slide-in transform — including overflow-y:auto, so it scrolls
+     itself rather than the real page. Opening or scrolling a story
+     must never move the page underneath (see the script: html.modal-
+     open locks background scroll), so #story-peek keeps showing the
+     exact same frozen sliver of the real page for as long as this is
+     open. left: calc(var(--strip) * 2) — the real margin strip, then
+     #story-peek's own 72px, then
+     this. Its content column matches .content exactly (see
+     .story-modal__scroll) so opening a story reads as "the content
+     column gained a page." display:none until opened (data-open)
+     rather than visibility/opacity alone, so closed content is never
+     in the tab order or hit-testable even before JS runs.
+     data-visible is the actual animated state — set a frame after
+     data-open so the slide-in transition always has a closed frame
+     to start from. */
+  html.modal-open { overflow: hidden; }
+
+  /* The "previous page" peeking out from under #story-modal — a 72px
+     strip immediately after the real margin strip, showing whatever
+     page content is actually there (not hidden, just visually muted
+     by the translucent wash) rather than a plain decorative fill.
+     Reinforces the push-navigation read: this page slid in from the
+     right and didn't fully cover what was behind it. It's a real
+     <button data-modal-close> (see the markup and script), so
+     clicking the visible sliver of the real page closes the story —
+     the closest thing this design has to a backdrop-click. The real
+     content under it is separately made inert while the page is
+     open (see the script), so this button is the only way to
+     interact with that area, not a layer on top of still-live
+     content. */
+  .story-peek {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: var(--strip);
+    width: var(--strip);
+    z-index: 30;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: rgba(255, 255, 255, 0.72);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 220ms ease;
+    display: none;
+  }
+  .story-peek[data-open="true"] { display: block; }
+  .story-peek[data-visible="true"] { opacity: 1; }
+
+  .story-modal {
+    position: fixed;
     top: 0;
     right: 0;
-    width: calc(var(--frame) - var(--rule-right));
-    height: 100%;
-    z-index: 3;
+    bottom: 0;
+    left: calc(var(--strip) * 2);
+    z-index: 30;
+    background: var(--paper);
+    border-left: 1px solid var(--border);
+    /* The scroll region is this element itself, not
+       .story-modal__scroll — that just carries the width cap/padding
+       now. Scrolling here means the scrollbar renders at the true
+       right edge of the viewport (this element already spans to
+       right:0), same place a native page scrollbar would sit,
+       instead of appearing part-way across the screen at the content
+       column's own edge. */
+    overflow-y: auto;
+    opacity: 0;
+    /* Slides in from the right, like a page being pushed on top of
+       this one rather than a dialog fading/rising into place. */
+    transform: translateX(32px);
+    transition: opacity 220ms ease, transform 220ms ease;
+    display: none;
+  }
+  .story-modal[data-open="true"] { display: block; }
+  .story-modal[data-visible="true"] {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .story-modal:focus-visible { outline: none; }
+
+  /* Floating action rail — pinned in the same 72px peek column as
+     #story-peek (left: var(--strip), that width), bottom-anchored
+     rather than stretched full-height. Same display/opacity toggle
+     off data-open/data-visible as the other fixed overlay layers. */
+  .story-actions {
+    position: fixed;
+    left: var(--strip);
+    width: var(--strip);
+    bottom: 24px;
+    z-index: 32;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 27px;
+    opacity: 0;
+    transition: opacity 220ms ease;
+  }
+  .story-actions[data-open="true"] { display: flex; }
+  .story-actions[data-visible="true"] { opacity: 1; }
+
+  .story-actions__btn {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--main);
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 150ms ease;
+  }
+  .story-actions__btn:hover,
+  .story-actions__btn:focus-visible { opacity: 1; }
+  .story-actions__icon { width: 40px; height: 40px; fill: none; }
+  .story-actions__icon--link { width: 36px; height: 36px; }
+  .story-actions__icon path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.667;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Label + shortcut, revealed on hover — plain text, no cartouche,
+     matching the Figma spec exactly. Every button is the same 40px box
+     centered in the 72px column (16px to the column's right edge
+     either side), and that edge is exactly the modal's own left border
+     — so 100% + 16px would land the tip flush against that border. The
+     extra +16px past that is the actual requested gap from the border
+     itself. .story-actions sits above the modal in z-index (32 vs. 30)
+     so the tip renders over its content rather than under it. */
+  .story-actions__tip {
+    position: absolute;
+    left: calc(100% + 32px);
+    top: 50%;
+    white-space: nowrap;
+    font-family: var(--face-mono);
+    font-size: var(--size-mast);
+    letter-spacing: var(--track-mast);
+    color: var(--main);
+    opacity: 0;
     pointer-events: none;
+    transform: translate(-6px, -50%);
+    transition: opacity 160ms ease, transform 160ms ease;
+  }
+  /* The → glyph sits centered on the font's x-height, well short of
+     the brackets' full ascender-to-descender span either side of it —
+     next to tall punctuation like [ ] that reads as bottom-heavy.
+     vertical-align: middle re-centers the glyph's own box against the
+     line instead of its baseline, which pulls it back up to visually
+     match the brackets. */
+  .story-actions__glyph {
+    display: inline-block;
+    vertical-align: middle;
+  }
+  .story-actions__btn:hover .story-actions__tip,
+  .story-actions__btn:focus-visible .story-actions__tip,
+  .story-actions__tip.is-shown {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+
+  /* Same box model as .content — max-width and box-sizing match
+     exactly, so opening a story reads as "the content column gained
+     a page" rather than some unrelated modal appearing. Just the
+     width cap and padding — #story-modal itself is the scroll region
+     (see above), not this. Top padding (208px, from the Figma frame)
+     is its own thing — see .story-modal__title. */
+  .story-modal__scroll {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--content-max);
+    /* Left padding is a flat 72px (var(--strip)) rather than
+       var(--pad-x) like .content — matches the strip's own width, so
+       strip + peek + this padding forms a consistent 72px rhythm
+       before the text starts. Right stays at 1.5x the left, same
+       relationship as .content, just anchored to the new value. */
+    padding: 208px calc(var(--strip) * 1.5) var(--pad-bottom) var(--strip);
+  }
+
+  /* Switching stories (next/prev) pushes the outgoing body out and the
+     incoming one in from the opposite side, driven by data-leaving/
+     data-entering (see switchStory() in the script) — a "next page"
+     read consistent with the modal's own slide-in. Opening from
+     closed doesn't use this at all: there's nothing to push against,
+     so open() just unhides the target body in place. */
+  .story-modal__body {
+    opacity: 1;
+    transform: translateX(0);
+    transition: opacity 200ms ease, transform 200ms ease;
+  }
+  .story-modal__body[data-leaving="left"] { opacity: 0; transform: translateX(-24px); }
+  .story-modal__body[data-leaving="right"] { opacity: 0; transform: translateX(24px); }
+  .story-modal__body[data-entering="left"] { opacity: 0; transform: translateX(-24px); }
+  .story-modal__body[data-entering="right"] { opacity: 0; transform: translateX(24px); }
+
+  .story-modal__title {
+    font-size: var(--size-hero);
+    line-height: var(--leading-hero);
+    letter-spacing: var(--track-hero);
+    margin: 0 0 32px;
+  }
+
+  .story-modal__lede {
+    font-size: 21px;
+    line-height: var(--leading-body);
+    letter-spacing: -0.02em;
+    max-width: 601px;
+    margin: 0 0 48px;
+  }
+
+  .story-modal__section { margin-bottom: 40px; }
+  .story-modal__section:last-child { margin-bottom: 0; }
+  .story-modal__section-title {
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    margin: 0 0 20px;
+  }
+  .story-modal__p {
+    font-size: 21px;
+    line-height: var(--leading-body);
+    letter-spacing: -0.02em;
+    max-width: 601px;
+    margin: 0 0 20px;
+  }
+  .story-modal__p:last-child { margin-bottom: 0; }
+
+  /* --- Content collection blocks -----------------------------------
+     Everything below renders a published story's blocks (see the
+     markup's s.story branch) — same visual language as
+     src/pages/stories/[slug].astro's own .story__* rules, just under
+     this file's own naming and nested inside .story-modal__scroll's
+     existing padding instead of that page's .story__pad. */
+  .story-modal__attrs {
+    display: flex;
+    flex-direction: column;
+    gap: var(--row-gap);
+    font-size: var(--size-mast);
+    line-height: var(--leading-mast);
+    margin: 0 0 48px;
+  }
+  .story-modal__attr { display: flex; gap: var(--row-gap); }
+  .story-modal__attr dt {
+    flex: none;
+    width: 88px;
+    font-family: var(--face-mono);
+    font-weight: 600;
+  }
+  .story-modal__attr dd {
+    margin: 0;
+    font-family: var(--face-mono);
+  }
+  .story-modal__heading {
+    font-family: var(--face-mono);
+    font-size: 21px;
+    line-height: var(--leading-body);
+    letter-spacing: -0.02em;
+    max-width: 601px;
+    margin: 0 0 20px;
+  }
+  .story-modal__list {
+    max-width: 601px;
+    font-size: 21px;
+    line-height: var(--leading-body);
+    letter-spacing: -0.02em;
+    list-style: disc;
+    padding-left: 32px;
+    margin: 0 0 20px;
+  }
+  .story-modal__list li { margin-bottom: 8px; }
+  .story-modal__list li:last-child { margin-bottom: 0; }
+  /* Full-bleed within the modal, same breakout technique as
+     .story-modal__gallery above (negative margin + re-added padding)
+     — a pull-quote should read as its own beat across the width of
+     the page, not squeezed into the 601px text column.
+     100% + both paddings, not 100vw: used to be 100vw, which reaches
+     .story-modal's own full width (escaping .story-modal__scroll's
+     1080px cap) on very wide screens, but resolves inconsistently
+     across browsers once .story-modal has its own scrollbar (its
+     overflow-y:auto — see above) — some correctly exclude that
+     scrollbar's width from 100vw, others don't, and on the ones that
+     don't this pushes every full-bleed block a scrollbar's-width past
+     .story-modal's real right edge, a persistent horizontal scroll.
+     100% is relative to .story-modal__scroll itself instead — always
+     exactly right regardless of any scrollbar, anywhere — at the cost
+     of also stopping at that cap on very wide screens instead of
+     reaching .story-modal's edge, same as the standalone story page's
+     equivalent (.story__quote) already does. */
+  .story-modal__quote {
+    background: #f9f9f9;
+    box-sizing: border-box;
+    width: calc(100% + var(--strip) + var(--strip) * 1.5);
+    margin-left: calc(-1 * var(--strip));
+    margin-bottom: 20px;
+  }
+  .story-modal__quote-text {
+    max-width: 908px;
+    box-sizing: border-box;
+    padding: 64px calc(var(--strip) * 1.5) 64px var(--strip);
+    font-family: var(--face-mono);
+    font-style: italic;
+    font-size: 25px;
+    line-height: var(--leading-body);
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  .story-modal__image { margin-bottom: 20px; }
+  .story-modal__image--enclosed img {
+    display: block;
+    width: 100%;
+    max-width: 601px;
+    height: auto;
+    object-fit: cover;
+  }
+  /* Same breakout as the quote/gallery above (100% + both paddings,
+     not 100vw — see the quote's own comment for why). */
+  .story-modal__image--full {
+    box-sizing: border-box;
+    width: calc(100% + var(--strip) + var(--strip) * 1.5);
+    margin-left: calc(-1 * var(--strip));
+  }
+  .story-modal__image--full img {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+  }
+  .story-modal__caption {
+    margin: 8px 0 0;
+    font-family: var(--face-mono);
+    font-size: var(--size-mast);
+    line-height: var(--leading-mast);
+    letter-spacing: var(--track-mast);
+    max-width: 320px;
+  }
+
+  /* Image gallery — a 6-column grid, each cell spanning 1-6 columns
+     per its filename (see mockupsGallery() up top: 2=1/3, 3=1/2, 4=2/3,
+     6=full). The cell's own
+     background color (also from the filename) shows as a mat around
+     the image rather than being cropped edge-to-edge, so it reads as
+     "a defined colour background" behind the photo, not just a photo
+     grid. Same recipe tried out in the Figma mockup (node 1305:6298,
+     "Cell/<tier>/<color>"), now driven by real files instead.
+
+     Escapes .story-modal__scroll's own padding via width/margin (same
+     technique as .content's own breakout — 100% + both paddings, not
+     100vw, see .story-modal__quote's own comment for why), then
+     re-adds padding-left/right matching the page's own gutter rhythm
+     (--strip left, 1.5x right — see .content), so the grid still has
+     the same left/right breathing room as everything else, just over
+     a wider track. See the mobile override below for the equivalent
+     at the width where .story-modal itself goes edge-to-edge. */
+  .story-modal__gallery {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 24px;
+    margin-top: 8px;
+    box-sizing: border-box;
+    width: calc(100% + var(--strip) + var(--strip) * 1.5);
+    margin-left: calc(-1 * var(--strip));
+    padding-left: var(--strip);
+    padding-right: calc(var(--strip) * 1.5);
+  }
+  .story-modal__cell {
+    position: relative;
+    grid-column: span var(--cell-col);
+    background: var(--cell-bg);
+    border-radius: 4px;
+    min-height: 420px;
+    box-sizing: border-box;
     overflow: hidden;
   }
-  .rail__word {
-    position: absolute;
-    left: 24px;
-    top: calc(190px + var(--i) * 470px);
-    font-family: var(--face-display);
-    font-weight: 700;
-    font-size: var(--size-rail);
-    line-height: 1.1;
-    color: var(--accent);
-    white-space: nowrap;
+  /* Padding lives on this inner wrapper, not .story-modal__cell itself,
+     so the percentage has something to resolve against: a percentage
+     padding is computed from the WIDTH of the padded element's own
+     containing block — i.e. its parent — so 15% here means 15% of
+     .story-modal__cell's own (grid-span-driven) width, exactly "15% of
+     the width of the bloc" for every cell regardless of its 1-6col
+     span. Padding directly on .story-modal__cell would instead resolve
+     against .story-modal__gallery's width, giving every cell the same
+     fixed padding no matter its own size — not what was asked. */
+  .story-modal__cell-inner {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 15%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
+  .story-modal__cell-inner img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  /* Hover caption — same fade interaction as .story-actions__tip (the
+     rail's "Next story [→]" etc. tooltips): mono face, fast opacity
+     transition. One shared element per gallery rather than one per
+     cell — visibility is toggled by .is-visible (set on the gallery's
+     own mouseenter/mouseleave, see the script below), not per-cell
+     :hover, specifically so moving from one mockup to the next doesn't
+     flicker it off crossing the gap between cells: mouseenter/
+     mouseleave don't fire again for moves between a container's own
+     children, only for entering/leaving the container itself. Position
+     tracks the cursor via --tip-x/--tip-y (also set on mousemove) with
+     a +16px lead so it trails just past the pointer. Text swaps per
+     cell (see the mouseover handler below) but is still a placeholder
+     — see GALLERY_TIP_DUMMY_TEXT up top — standing in while this
+     interaction itself is being tried out. */
+  .story-modal__cell-tip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    max-width: 260px;
+    font-family: var(--face-mono);
+    font-size: var(--size-mast);
+    line-height: var(--leading-mast);
+    letter-spacing: var(--track-mast);
+    color: var(--black);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(calc(var(--tip-x, 0px) + 16px), calc(var(--tip-y, 0px) + 16px));
+    transition: opacity 160ms ease;
+  }
+  .story-modal__cell-tip.is-visible { opacity: 1; }
 
   /* --- Masthead ------------------------------------------------- */
   .masthead {
-    position: relative;
-    z-index: 4;
+    position: sticky;
+    top: 0;
+    z-index: 5;
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--gutter);
-    padding: 100px var(--gutter) 0 var(--col-start);
-    font-family: var(--face-mono);
-    font-weight: 700;
-    font-size: var(--size-nav);
-    letter-spacing: -0.01em;
+    flex-wrap: wrap;
+    gap: 24px;
+    padding: 40px 0;
+    /* This is the actual fix for stories/about rows not hovering:
+       .masthead is sticky, so it's pinned over whatever's scrolled
+       underneath it — but its 40px top/bottom padding makes its real
+       (invisible) hit area ~110px tall, nearly 4x its visible pill
+       row, silently intercepting hover/click on anything scrolled
+       into that padding band. Nothing in here is interactive (no
+       links/buttons — just text), so pointer-events:none is a free
+       fix: clicks and hover now pass straight through to whatever's
+       actually underneath. */
+    pointer-events: none;
   }
-  .masthead__nav { text-align: right; }
-  .sep { font-weight: 400; }
+  .pill {
+    border: 1px solid var(--grey-1);
+    padding: 4px 12px;
+    background: var(--paper);
+    font-family: var(--face-mono);
+    font-size: var(--size-mast);
+    line-height: var(--leading-mast);
+    letter-spacing: var(--track-mast);
+    white-space: nowrap;
+  }
+  .pill b { font-weight: 700; }
+  .pill__clocks { font-weight: 400; }
+  .pill--bold { font-weight: 700; }
 
-  .dot {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    margin-right: 12px;
-    border-radius: 50%;
-    background: var(--accent);
-    vertical-align: -2px;
+  /* --- Rhythm --------------------------------------------------- */
+  /* Redesign: no whitespace gap between sections — a 1px .sep rule
+     sits between every one instead, and each section carries its own
+     72px side padding + 40/62/64px top-bottom padding (see per-section
+     rules). So .sections is just a plain column with zero gap. */
+  .sections {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  /* Full-bleed hairline between sections (Figma "Separator"). Spans
+     the whole content column since .content has no padding of its own
+     now. */
+  .sep {
+    align-self: stretch;
+    height: 1px;
+    background: var(--grey-1);
+  }
+  /* Shares .masthead's sticky containing-block duty — see the markup
+     comment on .intro for why this wrapper exists. --content-top
+     (172px) is the card-top → cartouches gap; --lede-top (8px) is the
+     cartouches → hero gap; 56px under the hero before the first .sep. */
+  .intro {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lede-top);
+    padding: var(--content-top) var(--pad-x) 72px;
+  }
+  /* Scroll reveal — gated behind html.js (see Base.astro) so content
+     just renders visible if JS never runs. Each line/row (.reveal-item,
+     tagged with its index via --i) fades and rises in on its own,
+     staggered off that index, once the section.is-visible toggles —
+     so a section reveals top-to-bottom rather than all at once.
+     :is(.intro, .sections) rather than just .sections — .hero moved
+     out into .intro (see its own markup comment), but still reveals
+     the same way as every other top-level section; the JS observer
+     selector below matches this same pair. */
+  html.js :is(.intro, .sections) > section .reveal-item {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 700ms ease-out, transform 700ms ease-out;
+    transition-delay: calc(var(--i, 0) * 160ms);
+  }
+  html.js :is(.intro, .sections) > section.is-visible .reveal-item {
+    opacity: 1;
+    transform: translateY(0);
   }
 
   /* --- Hero ----------------------------------------------------- */
+  /* One 32px prose column, 732px wide (Figma "Hero" text block).
+     Colour #333, not full black. Paragraphs separated by a 16px flex
+     gap (Figma mb-16). position/z-index lift it above .hero-illo. */
   .hero {
     position: relative;
-    z-index: 4;
-    padding: 240px var(--gutter) 0 var(--col-start);
-    max-width: 930px;
-    font-size: var(--size-hero);
-    font-weight: 500;
-    line-height: var(--leading-hero);
-    letter-spacing: var(--track-hero);
-  }
-  .hero__claim {
-    font-size: inherit;
-    font-weight: 500;
-    color: var(--accent);
-    max-width: 20ch;
-    margin-bottom: 16px;
-  }
-  .hero__body { max-width: 26ch; margin-bottom: 16px; }
-  .hero__body:last-child { margin-bottom: 0; }
-  .em { color: var(--accent); }
-
-  /* --- Marquee -------------------------------------------------- */
-  .marquee {
-    position: relative;
     z-index: 1;
-    margin-top: 200px;
+    max-width: var(--measure-hero);
+    font-size: var(--size-lede);
+    line-height: var(--leading-lede);
+    letter-spacing: var(--track-hero);
+    color: #333;
     display: flex;
     flex-direction: column;
-    gap: 28px;
+    gap: 16px;
   }
-  .marquee__row { overflow: hidden; }
-  .marquee__track {
-    display: flex;
-    width: max-content;
-    animation: slide 60s linear infinite;
-  }
-  .marquee__track--rev {
-    animation-direction: reverse;
-    animation-duration: 75s;
-  }
-  .marquee__set {
-    display: flex;
-    align-items: center;
-    gap: 32px;
-    padding-right: 32px;
-  }
-
-  @keyframes slide {
-    from { transform: translateX(0); }
-    to   { transform: translateX(-50%); }
-  }
-
-  .tile {
-    flex: none;
-    display: block;
-    width: calc(var(--w) * 1px);
-    aspect-ratio: var(--w) / var(--h);
-    border-radius: 4px;
-    background: var(--paper);
-    border: 1px solid var(--tile-edge);
-    box-shadow: var(--shadow-tile);
-    overflow: hidden;
-  }
-  .tile img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  /* --- Projects -------------------------------------------------- */
-  .projects {
-    position: relative;
-    z-index: 4;
-    padding: 180px var(--gutter) 0 var(--col-start);
-  }
-  .dot--anchor {
-    position: absolute;
-    left: 33px;
-    top: 186px;
+  .hero__para { margin: 0; }
+  /* The one real heading on the page — the mono lead-in sentence,
+     kept inline so it flows into the rest of the first paragraph
+     (Figma renders it as a Spline Sans Mono Medium run, same size as
+     the prose around it). */
+  .hero__h1 {
+    display: inline;
     margin: 0;
-  }
-  .projects ul {
-    display: flex;
-    flex-direction: column;
-    gap: 64px;
-    max-width: 900px;
-  }
-  .project__title {
-    font-size: var(--size-project);
-    font-weight: 500;
-    line-height: 1.3;
-    letter-spacing: var(--track-project);
-    margin-bottom: 24px;
-  }
-  .project__line {
     font-family: var(--face-mono);
-    font-size: var(--size-sub);
-    line-height: 1.3;
+    font-weight: 500;
+    font-size: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+  }
+  /* "Thomas Poblete" — accent colour (.em) + underline (.u) + italic. */
+  .hero__name { font-style: italic; }
+  /* Reserves room for the longest word in the rotation (ROTATE_WORDS
+     in the script below — "operational", 11ch) so the line doesn't
+     reflow as shorter/longer words type in and out. Exact because the
+     title's font is monospace — ch == one character, always. Update
+     this if you add a longer word to the list. */
+  .hero__rotate {
+    display: inline-block;
+    min-width: 11ch;
+  }
+  .hero__rotate::after {
+    content: "";
+    display: inline-block;
+    width: 0.5ch;
+    height: 0.9em;
+    margin-left: 2px;
+    background: currentColor;
+    vertical-align: text-bottom;
+    animation: hero-caret-blink 1s steps(1, jump-none) infinite;
+  }
+  @keyframes hero-caret-blink {
+    0%, 50% { opacity: 1; }
+    50.01%, 100% { opacity: 0; }
+  }
+  .em { color: var(--main); }
+  /* Underline as a background line, not text-decoration — lets its
+     width animate (native underlines can't). Visible at full width by
+     default (the underline itself doesn't depend on hover); hovering
+     replays a fast, snappy redraw from left to right on top of that.
+     background-position:0 100% sits the line right at the box's
+     bottom edge (an inline element's box hugs its font's content
+     metrics, so a fixed em offset could exceed it and get clipped at
+     some font-sizes and not others). The calc() nudges it up a couple
+     px from there, closer to the glyphs — going further than 100%
+     itself can reach since padding can't go negative. */
+  .u {
+    text-decoration: none;
+    background-image: linear-gradient(to right, currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-position: 0 calc(100% - 2px);
+    background-size: 100% 1px;
+    /* Repaint per wrapped line instead of once across the whole
+       (possibly multi-line) box — without this, a link that wraps
+       draws one underline under the last line only, stretched to the
+       full box width regardless of that line's actual text length. */
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .u:hover, .u:focus-visible {
+    animation: u-redraw 480ms cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  @keyframes u-redraw {
+    from { background-size: 0% 1px; }
+    to { background-size: 100% 1px; }
+  }
+
+  /* A real <a> (role="button", no href) that opens the story modal
+     instead of navigating — so it inherits the exact same styling as
+     every other .u link in the hero. Only thing it needs on top: an
+     hrefless <a> gets no pointer cursor by default. */
+  .hero__inline-trigger {
+    cursor: pointer;
+  }
+
+  /* --- Row (label + content, shared by about/bookmarks) --------- */
+  /* Figma: 140px label column, content butting straight against it
+     (72px section pad + 140 label = the 212px content offset), 62px
+     top/bottom section padding. */
+  .row {
+    display: flex;
+    gap: 0;
+    align-items: flex-start;
+    padding: 62px var(--pad-x);
+  }
+  .row__label {
+    flex: none;
+    width: var(--label-w);
+    margin: 0;
+    padding-top: 4px;
+    font-family: var(--face-mono);
+    font-size: var(--size-label);
+    font-weight: 400;
+    color: var(--main);
     letter-spacing: -0.02em;
   }
+  /* Bookmark links are smaller (14px) than the label's own 16px mono,
+     so the label's usual 4px padding-top overshoots their baseline —
+     drop it back to 0 to line the two up. */
+  .row--bookmarks .row__label { padding-top: 0; }
 
-  /* --- Contact --------------------------------------------------- */
-  .contact {
+  /* --- Stories section ------------------------------------------ */
+  #stories { padding: 40px var(--pad-x); }
+
+  /* Two columns: the mono row number (hugs its content) and the
+     title (takes the rest). No inter-row rules in the redesign —
+     just 24px top/bottom padding per row. */
+  .table {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 16px;
+    align-items: baseline;
+    font-size: var(--size-story);
+    line-height: var(--leading-story);
+    letter-spacing: var(--track-hero);
+  }
+  /* subgrid so each row's cells align to .table's two column tracks.
+     The row is always an inert <div> — it carries no cursor, no hover
+     treatment; only the .table__link inside the title does. */
+  .table__row {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    align-items: baseline;
+    column-gap: 16px;
+    padding: 24px 0;
+  }
+  /* position: relative anchors .table__soon below. */
+  .table__row[data-dim="true"] {
     position: relative;
-    z-index: 5;
-    margin-top: 220px;
-    min-height: 80px;
-    background: var(--accent);
-    color: #fff;
+  }
+  /* Number: mono, accent colour, hugs the title's baseline. */
+  .table__num {
+    font-family: var(--face-mono);
+    font-size: var(--size-num);
+    letter-spacing: var(--track-hero);
+    color: var(--main);
+    white-space: nowrap;
+  }
+  .table__title {
+    min-width: 0;
+    color: var(--black);
+  }
+  /* Dimmed rows (Figma opacity-30) — number drops its accent colour
+     and both cells go to 30%. Applied to the cells, not the row, so
+     the "Soon" caption sibling stays crisp. */
+  .table__row--dim .table__num {
+    color: var(--black);
+    opacity: 0.3;
+  }
+  .table__row--dim .table__title {
+    opacity: 0.3;
+  }
+  /* "Soon" — cursor-anchored caption, same recipe as .story-modal__
+     cell-tip: mono face, size-mast, fast opacity transition, position
+     tracks the cursor via --tip-x/--tip-y (row-relative, set on
+     mousemove — see the script) with the same +16px lead so it trails
+     just past the pointer. Black, not --main — this isn't a link/
+     action, just a status label. The row underneath has no click/hover
+     treatment of its own (see above), so this is the only feedback
+     hovering an inactive row gives. */
+  .table__soon {
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-family: var(--face-mono);
+    font-size: var(--size-mast);
+    line-height: var(--leading-mast);
+    letter-spacing: var(--track-mast);
+    color: var(--black);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease;
+    transform: translate(calc(var(--tip-x, 0px) + 16px), calc(var(--tip-y, 0px) + 16px));
+  }
+  .table__row[data-dim="true"]:hover .table__soon {
+    opacity: 1;
+  }
+
+  /* The title link — the only interactive target in the row. Plain
+     text until hovered/focused, then flips to orange (snapping in
+     fast, fading back out slowly). Its hit area is the text itself,
+     not the row. */
+  .table__link {
+    color: inherit;
+    text-decoration: none;
+    transition: color 900ms ease-out;
+  }
+  .table__link:hover,
+  .table__link:focus-visible {
+    color: var(--main);
+    transition: color 100ms ease-out;
+  }
+
+  /* --- About -------------------------------------------------------- */
+  .about {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--item-gap);
+  }
+  /* Each entry: title over description, 12px apart (Figma gap-12);
+     32px between entries is .about's own gap. The row carries no
+     cursor or hover treatment — only the org link inside .about__title
+     is interactive (underline redraw comes from the global .u:hover). */
+  .about__row {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .about__title {
+    font-size: var(--size-label);
+    line-height: var(--leading-body);
+    letter-spacing: var(--track-hero);
+    font-weight: 500;
+  }
+  .about__badge {
+    font-family: var(--face-mono);
+    font-weight: 500;
+  }
+  .about__desc {
+    font-size: var(--size-mast);
+    line-height: var(--leading-body);
+    letter-spacing: -0.02em;
+    color: var(--grey-3);
+  }
+
+  /* --- Bookmarks ------------------------------------------------------ */
+  .bookmarks {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--row-gap); /* 24px per Figma — tighter than about's 32px */
+  }
+  /* align-self + fit-content so the <a>'s hit area is only as wide as
+     its text (wrapping still capped at 320px), not the full column —
+     only the link itself is interactive. */
+  .bookmarks__item {
+    display: block;
+    align-self: flex-start;
+    width: fit-content;
+    max-width: 320px;
+    font-size: var(--size-mast);
+    line-height: var(--leading-body);
+    letter-spacing: var(--track-hero);
+    cursor: default;
+  }
+  .bookmarks__more {
+    display: block;
+    /* Without this it stretches to fill the column (the flex
+       column's default align-items:stretch) — .u's underline then
+       draws across that whole stretched width instead of hugging
+       the short "See more" text. */
+    align-self: flex-start;
+    /* Figma wants 16px above this one, not the list's usual 24px
+       gap — trims the 8px difference back off. */
+    margin-top: -8px;
+    padding-top: 16px;
+    max-width: 320px;
+    font-size: var(--size-mast);
+    line-height: var(--leading-body);
+    letter-spacing: var(--track-hero);
+    font-weight: 500;
+    cursor: default;
+  }
+  a.bookmarks__item { cursor: pointer; }
+
+  /* --- Testimonials ------------------------------------------------ */
+  /* Name+quote as one <p> with a <br> between them, matching the Figma
+     "Testimonials" node. A plain section now — the .sep above it is
+     the rule that sets it off; 64px top/bottom padding, 72px sides,
+     same as every other section. */
+  .testimonials-section {
+    padding: 64px var(--pad-x);
+  }
+  .testimonials {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 366px;
+  }
+  .testimonial__text {
+    margin: 0;
+  }
+  .testimonial__name {
+    font-family: var(--face-mono);
+    font-weight: 500;
+    font-size: var(--size-label);
+    letter-spacing: var(--track-hero);
+  }
+  /* "Next" (see .testimonial__next) lives right after the quote span,
+     inside the same <p> — a literal space in the markup between them
+     separates it as its own word rather than running the two
+     together. cursor/hover live on the parent .testimonial now
+     (below), not here — the whole block, name included, is the click
+     target for advancing the slider (see the script), not just the
+     quote text. */
+  .testimonial__quote {
+    font-size: var(--size-mast);
+    line-height: var(--leading-body);
+    letter-spacing: -0.02em;
+    color: var(--grey-3);
+  }
+  .testimonial:hover .u {
+    animation: u-redraw 480ms cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  .testimonial__next {
+    font-weight: 500;
+    font-size: var(--size-mast);
+    color: var(--black);
+  }
+  /* Swap animation — same leave/enter recipe as .story-modal__body's
+     own next/prev transition (see switchStory() in the script): rest
+     state transitions opacity+transform, [data-leaving]/[data-entering]
+     set the off-rest values the JS toggles around the actual
+     hidden-attribute swap. Slower and eased-out (vs. story-modal__
+     body's linear-ish 200ms ease) — same curve as the page's own
+     .reveal-item fades — reads noticeably smoother for a small block
+     like this; the JS's 320ms timeout matches this duration. cursor
+     here (not on .testimonial__quote) — see the script, the whole
+     block including the name is the click target. */
+  .testimonial {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 320ms ease-out, transform 320ms ease-out;
+    cursor: pointer;
+  }
+  .testimonial[data-leaving] { opacity: 0; transform: translateY(-10px); }
+  .testimonial[data-entering] { opacity: 0; transform: translateY(10px); }
+
+  /* --- Footer bar ------------------------------------------------ */
+  .navbar {
+    position: relative;
+    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;
     gap: 32px;
-    padding: 16px 32px;
-    font-size: var(--size-sub);
+    min-height: var(--foot-h);
+    padding: 12px 32px;
+    background: var(--main);
+    color: #fff;
+    font-size: var(--size-foot);
   }
-  .contact__lead { font-weight: 600; }
-  .contact a { border-bottom: 1px solid transparent; }
-  .contact a:hover { border-bottom-color: #fff; }
+  .navbar__lead { font-weight: 600; }
+
+  .mailbtn {
+    font: inherit;
+    color: inherit;
+    background-color: transparent;
+    background-image: linear-gradient(to right, currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-position: 0 calc(100% - 2px);
+    background-size: 100% 1px;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    transition: opacity 120ms ease;
+  }
+  .mailbtn:hover, .mailbtn:focus-visible {
+    animation: u-redraw 480ms cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  .mailbtn.is-copied { opacity: 0.85; }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .navbar a {
+    background-image: linear-gradient(to right, currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-position: 0 calc(100% - 2px);
+    background-size: 100% 1px;
+  }
+  .navbar a:hover, .navbar a:focus-visible {
+    animation: u-redraw 480ms cubic-bezier(0.65, 0, 0.35, 1);
+  }
 
   /* --- Narrow ----------------------------------------------------- */
-  @media (max-width: 900px) {
-    .frame::before, .frame::after,
-    .rule, .rail { display: none; }
-
-    .masthead {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 40px var(--gutter) 0;
+  /* 1024px, not some arbitrary device size — the narrowest viewport
+     where the stories table can render at its natural width without
+     wrapping. Below it we drop straight to the single-column mobile
+     layout, which already wraps table rows on purpose. (.side-rail
+     has its own, wider 1152px breakpoint further up, for unrelated
+     reasons — see the comment there — so it's already gone well
+     before this one hits.) */
+  @media (max-width: 1024px) {
+    .strip { display: none; }
+    /* Section side padding follows the --pad-x clamp (down to 28px);
+       vertical padding tightens to a flat 40px across the board. */
+    .intro { padding-bottom: 40px; }
+    #stories,
+    .row,
+    .testimonials-section { padding-top: 40px; padding-bottom: 40px; }
+    .masthead { gap: 12px; }
+    .pill { white-space: normal; }
+    .row { flex-direction: column; gap: 12px; }
+    .row__label { width: auto; padding-top: 0; }
+    .table__row { padding: 16px 0; }
+    .navbar { gap: 20px; }
+    /* [data-open="true"], not just .story-peek — the base rule sets
+       display:block on that same attribute selector, which is more
+       specific than a bare class and would otherwise win regardless
+       of media query order. */
+    .story-peek[data-open="true"] { display: none; }
+    .story-modal { left: 0; }
+    .story-modal__scroll { padding-top: 96px; padding-bottom: 40px; padding-left: 32px; padding-right: 48px; }
+    /* .story-modal__scroll's own padding changed above (32/48 instead
+       of strip/strip*1.5), so the breakout's re-added padding has to
+       match: 100% + 32 + 48, same 100%-not-100vw reasoning as the
+       base rules (see .story-modal__quote's own comment) — still true
+       here even though .story-modal itself is left:0 at this width
+       (so 100vw would happen to be close), no reason to reintroduce
+       the ambiguity just because it'd be less wrong in this one case.
+       Columns collapse to one: at 6 columns a 1-span cell would be a
+       sixth of an already-narrow viewport, too small for a mockup
+       screenshot to read — every cell stacks full width instead,
+       ignoring its desktop --cell-col, so each mockup stays legible
+       regardless of what fraction it was given on wide screens. */
+    .story-modal__gallery {
+      width: calc(100% + 32px + 48px);
+      margin-left: -32px;
+      padding-left: 32px;
+      padding-right: 48px;
+      grid-template-columns: 1fr;
     }
-    .masthead__nav { text-align: left; }
-
-    .hero     { padding: 80px var(--gutter) 0; max-width: none; }
-    .hero__claim, .hero__body { max-width: 22ch; }
-
-    .marquee  { margin-top: 80px; }
-    .projects { padding: 90px var(--gutter) 0; }
-    .dot--anchor { display: none; }
-    .projects ul { gap: 48px; }
-
-    .contact {
-      margin-top: 100px;
-      justify-content: flex-start;
-      gap: 20px;
-    }
+    .story-modal__cell { grid-column: 1; }
+    /* Same breakout swap as the gallery above, same reason. */
+    .story-modal__quote { width: calc(100% + 32px + 48px); margin-left: -32px; }
+    .story-modal__quote-text { padding-left: 32px; padding-right: 48px; }
+    .story-modal__image--full { width: calc(100% + 32px + 48px); margin-left: -32px; }
+    /* The peek column it's normally pinned in is gone at this width
+       (.story-peek above), so anchor to the viewport edge directly
+       instead, with a 16px inset. */
+    .story-actions { left: 16px; width: auto; }
   }
 </style>

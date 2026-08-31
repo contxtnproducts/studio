@@ -15,15 +15,20 @@ const { title, description } = Astro.props;
     <meta name="description" content={description} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta name="theme-color" content="#fffdf9" />
+    <meta name="theme-color" content="#ffffff" />
 
-    <!-- Draft: not indexed until the positioning question is settled. -->
+    <!-- Draft. Remove when you want Google to index it. -->
     <meta name="robots" content="noindex, nofollow" />
+
+    <!-- Gates the scroll-reveal hidden state (see index.astro) behind
+         confirmed JS support, so content just renders visible if JS
+         never runs, instead of staying stuck invisible. -->
+    <script is:inline>document.documentElement.classList.add("js");</script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Geist:wght@700&family=Spline+Sans+Mono:wght@400;700&family=Spline+Sans:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Spline+Sans+Mono:wght@400;700&family=Spline+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
   </head>
@@ -42,11 +47,13 @@ const { title, description } = Astro.props;
 
   body {
     margin: 0;
-    background: var(--margin);
-    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--page-bg);
+    color: var(--black);
     font-family: var(--face-sans);
     font-weight: 400;
-    overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -55,17 +62,43 @@ const { title, description } = Astro.props;
 
   a { color: inherit; text-decoration: none; }
 
-  :focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 3px;
+  /* --- Margin strip ------------------------------------------------
+     Lives here (global, shared by every page through this layout)
+     rather than duplicated per-page — index.astro and stories/[slug]
+     both render the identical markup for it, so one shared stylesheet
+     avoids keeping two copies in sync. */
+  .strip {
+    position: relative;
+    flex: none;
+    width: var(--strip);
+    align-self: stretch;
+    background: var(--strip-bg);
+  }
+  .strip::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 1px;
+    background: var(--border);
+  }
+  .punch {
+    position: absolute;
+    left: 50%;
+    top: var(--t);
+    transform: translateX(-50%);
+    width: 16px;
+    height: 16px;
   }
 
-  ::selection { background: var(--accent); color: #fff; }
+  :focus-visible { outline: 2px solid var(--main); outline-offset: 3px; }
+
+  ::selection { background: var(--main); color: #fff; }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
     }
   }

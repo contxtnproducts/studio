@@ -1,44 +1,92 @@
 /* ---------------------------------------------------------------
-   Design tokens — Applied Context
-   Values read directly off the Figma file (Desktop - 15).
-   Nothing in the Figma is bound to a Figma variable yet, so these
-   were lifted from raw fills. When you do define variables in Figma,
-   use these same names and they'll line up.
+   Design tokens — poblete.design
+   Read off Figma "Home" (node 1431:170), the redesign that replaced
+   "Desktop - 25". Colours are bound to Figma variables (--main,
+   --grey-1, --grey-2, --grey-3, --black, --white); the card / page
+   fills (--page-bg, --paper-card, --strip-bg) are raw hex lifted from
+   the same file.
+   Type scale is now specified: the hero prose is 32px, the stories
+   titles 24px, everything else 16/14px (see the Figma text styles
+   H3 / Body - Minor / Body - Link). Desktop values are flat; below the
+   1440 frame width they scale down via the media query at the bottom,
+   each clamp calibrated so it equals the flat value exactly at 1440px.
    --------------------------------------------------------------- */
 
 :root {
   /* --- Colour -------------------------------------------------- */
-  --paper:      #ffffff;   /* main content field                   */
-  --margin:     #fffdf9;   /* the cream side rails                 */
-  --accent:     #ff4f27;   /* rules, hero emphasis, footer, titles */
-  --ink:        #000000;
-  --tile-edge:  #e3e3e3;
-
-  --shadow-tile:  2px 2px 16px 0 rgba(165, 165, 165, 0.2);
-  --shadow-lift: 2px -2px 24px 4px rgba(0, 0, 0, 0.2);
+  --page-bg:    #f7f7f7;   /* behind the content card */
+  --paper-card: #fdfdfd;   /* the content card fill (Container) */
+  --paper:      #ffffff;   /* true white — pills, other raised surfaces */
+  --strip-bg:   #fffdf9;   /* margin strip fill (Intercalaire), "Washed Yellow" */
+  --main:       #ff4f27;   /* accent: emphasis, footer, section labels */
+  --border:     #ffa38f;   /* soft orange, story-modal edge only */
+  --black:      #000000;
+  --white:      #ffffff;
+  --grey-1:     #dedede;   /* pill borders, section separators */
+  --grey-2:     #999999;   /* Figma "Grey 2" — de-emphasised inline text */
+  --grey-3:     #666666;   /* Figma "Grey 3" — muted secondary text
+                               (about descriptions, testimonial quote) */
 
   /* --- Type ---------------------------------------------------- */
-  --face-sans:    "Spline Sans", -apple-system, system-ui, sans-serif;
-  --face-mono:    "Spline Sans Mono", ui-monospace, monospace;
-  --face-display: "Geist", "Spline Sans", sans-serif;
+  --face-sans: "Spline Sans", -apple-system, system-ui, sans-serif;
+  --face-mono: "Spline Sans Mono", ui-monospace, monospace;
 
-  --size-hero:    clamp(2rem, 2.92vw, 2.625rem);   /* 42px @1440   */
-  --size-project: clamp(1.5rem, 2.36vw, 2.125rem); /* 34px         */
-  --size-sub:     clamp(1.125rem, 1.67vw, 1.5rem); /* 24px         */
-  --size-nav:     clamp(0.9375rem, 1.39vw, 1.25rem);
-  --size-rail:    clamp(4.5rem, 8.75vw, 7.875rem); /* 126px        */
+  /* Flat by default — full size across the whole 1440 frame. Only once
+     the viewport drops below the frame does type scale down; that
+     scaling lives in the media query below, each clamp's middle term
+     set to value/14.4vw so it resolves to exactly the flat value at
+     1440px and shrinks from there. */
+  --size-lede:      2rem;      /* 32px — hero prose (incl. the h1) */
+  --size-hero:      1.875rem;  /* 30px — story-detail titles (modal + [slug]) */
+  --size-story:     1.5rem;    /* 24px — stories table titles */
+  --size-foot:      1rem;      /* 16px, flat */
+  --size-mast:      0.875rem;  /* 14px — pills, body-minor, captions */
+  --size-label:     1rem;      /* 16px — section labels, about titles */
+  --size-num:       1rem;      /* 16px — stories row number (mono) */
 
-  --track-hero:    -0.02em;
-  --track-project: -0.02em;
-  --leading-hero:  1.3;
+  --track-hero: -0.02em;   /* -0.64px @ 32, -0.48px @ 24, -0.32px @ 16 */
+  --track-mast: -0.01em;   /* -0.14px @ 14 — pills */
+
+  --leading-lede:  1.5;
+  --leading-hero:  1.4;
+  --leading-story: 1.3;
+  --leading-body:  1.5;
+  --leading-mast:  1.4;
 
   /* --- Layout --------------------------------------------------
-     The Figma is a 1440 frame with orange hairlines at x=76 and
-     x=1418, and the text column starting at x=150.               */
-  --frame:        1440px;
-  --rule-left:    76px;
-  --rule-right:   1418px;
-  --rail-right-w: 371px;
-  --col-start:    150px;
-  --gutter:       clamp(1.5rem, 5vw, 150px);
+     1440 frame: 72px margin strip, then the content column filling
+     the rest (1368px). Figma section geometry: 172px from the card
+     top to the cartouches, cartouches → hero gap 8px, 56px under the
+     hero, then a 1px rule between every section; section padding is a
+     flat 72px left/right and 40 (stories) / 62 (background,
+     bookmarks) / 64 (testimonials) top/bottom. */
+  --frame:      1440px;
+  --strip:      72px;
+  --pad-x:      72px;    /* section inner padding, left/right */
+  --content-top: 172px;  /* card top → cartouches */
+  --lede-top:   8px;     /* cartouches → hero */
+  --pad-bottom: 96px;    /* story-modal / [slug] bottom padding */
+
+  --measure-hero: 732px; /* reading width of the hero prose column */
+  --label-w:      140px;  /* section-label column (Background / Bookmarks) */
+  --row-gap:      24px;
+  --item-gap:     32px;   /* between entries inside about */
+  --foot-h:       72px;
+  --content-max:  1368px; /* == frame - strip; mirrored by story-modal */
+}
+
+/* Below the 1440 frame the card is width-constrained and the column
+   shrinks, so type and spacing scale together. Each clamp's middle
+   term is value/14.4vw — i.e. it resolves to the flat value at exactly
+   1440px viewport and shrinks proportionally below that, with a floor
+   for the narrow layout. */
+@media (max-width: 1440px) {
+  :root {
+    --size-lede:  clamp(1.375rem, 2.222vw, 2rem);
+    --size-hero:  clamp(1.375rem, 2.083vw, 1.875rem);
+    --size-story: clamp(1.125rem, 1.667vw, 1.5rem);
+
+    --pad-x:       clamp(28px, 5vw, 72px);
+    --content-top: clamp(72px, 11.944vw, 172px);
+  }
 }

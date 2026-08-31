@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+
+# astro generated cache
+.astro/
+
+# OS / editor junk
+.DS_Store
+
+# local tooling config
+.claude/
+.vercel/
+
+# staging photos not used by the site (see photosFor() in index.astro —
+# it only reads the top level of public/shots/about/)
+public/shots/about/aside/

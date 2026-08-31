@@ -1,0 +1,435 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+
+// One real, static, shareable route per published story — replaces
+// the old in-page .story-modal overlay for these (see index.astro's
+// history: that pattern still exists there for the "mockups" gallery,
+// which doesn't have a title/attributes shape and doesn't fit this
+// template). draft:true (the default — see content.config.ts) skips a
+// story here entirely, same as the old `active:false` inert-row
+// treatment on the home page table did.
+export async function getStaticPaths() {
+  const entries = (await getCollection("work", ({ data }) => !data.draft)).sort(
+    (a, b) => a.data.order - b.data.order
+  );
+  return entries.map((entry, i) => ({
+    params: { slug: entry.id },
+    props: {
+      entry,
+      nextSlug: entries[(i + 1) % entries.length].id,
+    },
+  }));
+}
+
+const { entry, nextSlug } = Astro.props;
+const { title, summary, role, context, stage, tags, blocks } = entry.data;
+
+const attributes = [
+  ["Role", role],
+  ["Context", context],
+  ["Stage", stage],
+  ["Tags", tags?.join(" ; ")],
+].filter(([, value]) => value);
+---
+
+<Base title={`${title} — poblete.design`} description={summary}>
+  <div class="story">
+    <!-- Margin strip — same fill/edge/punch treatment as the home
+         page's own .strip (see index.astro); CSS lives in Base.astro,
+         shared by both pages. This page is reached directly (a real
+         route, for shareable links/SEO/crawlers/no-JS) as often as
+         it's opened as the in-page modal from the home page (see
+         index.astro's own script) — the modal is the primary way
+         most visitors get here, this page's own chrome (strip, action
+         rail below) is what a direct visit or a full reload sees. -->
+    <div class="strip" aria-hidden="true">
+      <img class="punch" style="--t:56px" src="/shots/hole.png" alt="" />
+      <img class="punch" style="--t:382px" src="/shots/hole.png" alt="" />
+      <img class="punch" style="--t:652px" src="/shots/hole.png" alt="" />
+    </div>
+
+    <!-- Peek band — a second 72px column, immediately after the real
+         margin strip, same spot index.astro's own #story-peek used to
+         occupy. That one showed the actual home page peeking through
+         (same document, modal overlay); a real separate page can't do
+         that live — there's no previous page still in the DOM to show
+         — so this is a static echo of the same translucent-wash
+         language instead: still visually a second band the story
+         content pushes in over, just not a live view of anything. -->
+    <div class="story-peek" aria-hidden="true"></div>
+
+    <!-- Action rail — close/next/copy, same icons and same second band
+         (left: var(--strip), not 0 — that's .strip's own column) as
+         the in-page modal's own .story-actions in index.astro (a
+         separate element — this page and the modal aren't nested in
+         each other, see the comment by the strip above). Plain links
+         here rather than JS: reaching this page directly means
+         there's no modal/previous page in play, just a real page with
+         a real "back" (browser back / this href) and a real "next"
+         (the next story's own URL). Only copy-link still needs JS. -->
+    <nav class="story-actions" aria-label="Story navigation">
+      <a class="story-actions__btn" href={`/stories/${nextSlug}/`} aria-label="Next story">
+        <svg class="story-actions__icon" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+          <path d="M8.33333 20H31.6667" />
+          <path d="M20 8.33333L31.6667 20L20 31.6667" />
+        </svg>
+        <span class="story-actions__tip">Next story [<span class="story-actions__glyph">&rarr;</span>]</span>
+      </a>
+      <button type="button" class="story-actions__btn" id="story-detail-copy" aria-label="Copy link to this story">
+        <svg class="story-actions__icon story-actions__icon--link" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
+          <path d="M15 19.5C15.6442 20.3612 16.466 21.0738 17.4098 21.5894C18.3536 22.105 19.3973 22.4117 20.47 22.4885C21.5427 22.5653 22.6194 22.4106 23.627 22.0347C24.6347 21.6588 25.5497 21.0706 26.31 20.31L30.81 15.81C32.1762 14.3955 32.9321 12.501 32.9151 10.5345C32.898 8.56801 32.1092 6.68692 30.7186 5.29636C29.3281 3.9058 27.447 3.11703 25.4805 3.09994C23.514 3.08286 21.6195 3.83881 20.205 5.205L17.625 7.77" />
+          <path d="M21 16.5C20.3558 15.6388 19.534 14.9262 18.5902 14.4106C17.6464 13.895 16.6027 13.5883 15.53 13.5115C14.4573 13.4347 13.3806 13.5894 12.373 13.9653C11.3653 14.3412 10.4503 14.9294 9.69 15.69L5.19 20.19C3.82381 21.6045 3.06786 23.499 3.08494 25.4655C3.10203 27.432 3.8908 29.3131 5.28136 30.7036C6.67192 32.0942 8.55301 32.883 10.5195 32.9001C12.486 32.9171 14.3805 32.1612 15.795 30.795L18.36 28.23" />
+        </svg>
+        <span class="story-actions__tip" id="story-detail-copy-tip">Copy link [L]</span>
+      </button>
+      <a class="story-actions__btn" href="/" aria-label="Close">
+        <svg class="story-actions__icon" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+          <path d="M30 10L10 30" />
+          <path d="M10 10L30 30" />
+        </svg>
+        <span class="story-actions__tip">Close [Esc]</span>
+      </a>
+    </nav>
+
+    <article class="story__content">
+      <div class="story__pad">
+        <h1 class="story__title">{title}</h1>
+      </div>
+
+      {attributes.length > 0 && (
+        <dl class="story__attrs story__pad">
+          {attributes.map(([label, value]) => (
+            <div class="story__attr">
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {blocks.map((block) => {
+        switch (block.type) {
+          case "heading":
+            return (
+              <p class="story__pad story__heading">{block.text}</p>
+            );
+          case "paragraph":
+            return (
+              <p class="story__pad story__paragraph">{block.text}</p>
+            );
+          case "list":
+            return (
+              <ul class="story__pad story__list">
+                {block.items.map((item) => <li>{item}</li>)}
+              </ul>
+            );
+          case "quote":
+            return (
+              <div class="story__quote">
+                <p class="story__pad story__quote-text">{block.text}</p>
+              </div>
+            );
+          case "image":
+            // enclosed images sit right under the title/attributes, so
+            // they're usually the first thing on screen (and the page's
+            // LCP element) — eager/high-priority rather than lazy, so
+            // they're not still popping in mid-slide-transition. Full-
+            // width ones (below) are further down the page and stay
+            // lazy.
+            return block.variant === "enclosed" ? (
+              <div class="story__pad story__image story__image--enclosed">
+                <img src={block.src} alt={block.alt} loading="eager" fetchpriority="high" />
+                {block.caption && <p class="story__caption">{block.caption}</p>}
+              </div>
+            ) : (
+              <div class="story__image story__image--full">
+                <img src={block.src} alt={block.alt} loading="lazy" />
+                {block.caption && <p class="story__caption story__pad">{block.caption}</p>}
+              </div>
+            );
+          default:
+            return null;
+        }
+      })}
+    </article>
+  </div>
+
+  <script>
+    // Copy-link — same "flash the label, revert after a beat" pattern
+    // as the home page's own email-copy button, simplified: no
+    // fallback text needed since there's nothing sensitive to expose,
+    // just the current URL.
+    (function () {
+      const btn = document.getElementById("story-detail-copy");
+      const tip = document.getElementById("story-detail-copy-tip");
+      if (!btn || !tip) return;
+      const defaultLabel = tip.textContent;
+      let timer;
+      btn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(location.href);
+          tip.textContent = "Copied ✓";
+        } catch {
+          tip.textContent = "Copy failed";
+        }
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          tip.textContent = defaultLabel;
+        }, 2200);
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.key === "l" || e.key === "L") btn.click();
+        else if (e.key === "Escape") {
+          const close = document.querySelector('.story-actions__btn[aria-label="Close"]');
+          if (close instanceof HTMLAnchorElement) close.click();
+        }
+      });
+    })();
+  </script>
+</Base>
+
+<style>
+  .story {
+    display: flex;
+    align-items: stretch;
+    min-height: 100vh;
+  }
+
+  /* --- Margin strip -------------------------------------------- */
+  /* .strip/.strip::after/.punch live in Base.astro's global
+     stylesheet, not here — shared with index.astro, which renders the
+     identical markup. */
+
+  /* --- Peek band — second 72px column, right after .strip (left:
+     var(--strip), not 0 — that's .strip's own column). See the
+     markup comment for why this is a static wash rather than a live
+     peek of the previous page. Same translucent white + right border
+     as index.astro's own #story-peek used. --- */
+  .story-peek {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: var(--strip);
+    width: var(--strip);
+    background: rgba(255, 255, 255, 0.72);
+    border-right: 1px solid var(--border);
+    z-index: 1;
+  }
+
+  /* --- Action rail — fixed in the peek band's own column (not
+     .strip's), so it stays put on scroll and reads as its own layer
+     above the wash (z-index 2 > peek's 1). Simplified from
+     index.astro's .story-actions: no open/close animation (nothing to
+     animate into — this is the page itself, not an overlay), so just
+     the hover-tip fade remains. --- */
+  .story-actions {
+    position: fixed;
+    left: var(--strip);
+    width: var(--strip);
+    bottom: 24px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 27px;
+  }
+  .story-actions__btn {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--main);
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 150ms ease;
+  }
+  .story-actions__btn:hover,
+  .story-actions__btn:focus-visible {
+    opacity: 1;
+  }
+  .story-actions__icon {
+    width: 40px;
+    height: 40px;
+    fill: none;
+  }
+  .story-actions__icon--link {
+    width: 36px;
+    height: 36px;
+  }
+  .story-actions__icon path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.667;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .story-actions__tip {
+    position: absolute;
+    left: calc(100% + 32px);
+    top: 50%;
+    white-space: nowrap;
+    font-family: var(--face-mono);
+    font-size: var(--size-mast);
+    letter-spacing: var(--track-mast);
+    color: var(--main);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-6px, -50%);
+    transition: opacity 160ms ease, transform 160ms ease;
+  }
+  .story-actions__glyph {
+    display: inline-block;
+    vertical-align: middle;
+  }
+  .story-actions__btn:hover .story-actions__tip,
+  .story-actions__btn:focus-visible .story-actions__tip {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+
+  /* --- Content column --- */
+  .story__content {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    padding: 96px 0 96px var(--strip);
+    /* No border-left here — .story-peek's own border-right already
+       marks this same boundary (both sit at the same x: strip width +
+       peek width), one line rather than two stacked on top of each
+       other. */
+  }
+  /* Text/enclosed content is inset by --strip on both sides (matching
+     the home page's own 72px rhythm); full-width images (below)
+     deliberately skip this to bleed to the column's own edge. */
+  .story__pad {
+    padding-left: var(--strip);
+    padding-right: calc(var(--strip) * 1.5);
+    box-sizing: border-box;
+  }
+
+  .story__title {
+    font-family: var(--face-mono);
+    font-size: var(--size-hero);
+    line-height: var(--leading-hero);
+    letter-spacing: var(--track-hero);
+    font-weight: 400;
+    max-width: 601px;
+  }
+
+  .story__attrs {
+    display: flex;
+    flex-direction: column;
+    gap: var(--row-gap);
+    font-size: var(--size-mast);
+    line-height: var(--leading-mast);
+  }
+  .story__attr {
+    display: flex;
+    gap: var(--row-gap);
+  }
+  .story__attr dt {
+    flex: none;
+    width: 88px;
+    font-family: var(--face-mono);
+    font-weight: 600;
+  }
+  .story__attr dd {
+    margin: 0;
+    font-family: var(--face-mono);
+  }
+
+  .story__heading {
+    font-family: var(--face-mono);
+    font-size: 21px;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+    color: var(--main);
+    max-width: 601px;
+  }
+  .story__paragraph {
+    font-size: 21px;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+    color: #333;
+    max-width: 601px;
+  }
+  .story__list {
+    max-width: 601px;
+    font-size: 21px;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+    color: var(--black);
+    list-style: disc;
+    padding-left: calc(var(--strip) + 32px);
+  }
+  .story__list li {
+    margin-bottom: 8px;
+  }
+  .story__list li:last-child {
+    margin-bottom: 0;
+  }
+
+  .story__quote {
+    background: #f9f9f9;
+    width: 100%;
+  }
+  .story__quote-text {
+    max-width: 908px;
+    box-sizing: border-box;
+    padding-top: 64px;
+    padding-bottom: 64px;
+    font-family: var(--face-mono);
+    font-style: italic;
+    font-size: 25px;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+    color: var(--black);
+  }
+
+  .story__image--enclosed img {
+    display: block;
+    width: 100%;
+    max-width: 601px;
+    height: auto;
+    object-fit: cover;
+  }
+  .story__image--full img {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+  }
+  .story__caption {
+    margin-top: 8px;
+    font-family: var(--face-mono);
+    font-size: var(--size-mast);
+    line-height: var(--leading-mast);
+    letter-spacing: var(--track-mast);
+    color: var(--black);
+    max-width: 320px;
+  }
+
+  @media (max-width: 1024px) {
+    .story__pad {
+      padding-left: 32px;
+      padding-right: 48px;
+    }
+    .story__content {
+      padding-left: 0;
+    }
+    .strip,
+    .story-peek,
+    .story-actions {
+      display: none;
+    }
+  }
+</style>
