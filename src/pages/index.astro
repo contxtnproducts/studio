@@ -395,26 +395,26 @@ const testimonials = [
         <section class="row" aria-label="About">
           <h2 class="row__label reveal-item" style="--i: 0">Background</h2>
           <div class="about">
-            {about.map((item, i) => (
-              <div
-                class="about__row reveal-item"
-                style={`--i: ${i + 1}`}
-                data-photos={item.photos.length > 0 ? JSON.stringify(item.photos) : undefined}
-              >
-                {item.url ? (
-                  <a class="about__title" href={item.url} target="_blank" rel="noopener noreferrer">
-                    {item.badge && <span class="about__badge">{item.badge}</span>}
-                    {item.role} • <span class="u">{item.org}</span>
-                  </a>
-                ) : (
+            {about.map((item, i) => {
+              const Tag = item.url ? "a" : "div";
+              const linkAttrs = item.url
+                ? { href: item.url, target: "_blank", rel: "noopener noreferrer" }
+                : {};
+              return (
+                <Tag
+                  class="about__row reveal-item"
+                  style={`--i: ${i + 1}`}
+                  data-photos={item.photos.length > 0 ? JSON.stringify(item.photos) : undefined}
+                  {...linkAttrs}
+                >
                   <p class="about__title">
                     {item.badge && <span class="about__badge">{item.badge}</span>}
                     {item.role} • <span class="u">{item.org}</span>
                   </p>
-                )}
-                {item.stats && <p class="about__desc">{item.stats}</p>}
-              </div>
-            ))}
+                  {item.stats && <p class="about__desc">{item.stats}</p>}
+                </Tag>
+              );
+            })}
           </div>
         </section>
 
@@ -844,10 +844,11 @@ const testimonials = [
         }
         if (!Array.isArray(photos) || photos.length === 0) return;
 
-        // Bind to the whole title line (.about__title), not the row, so
-        // the floating photo appears while the pointer is anywhere over
-        // the text but not beyond it or over the description.
-        const target = row.querySelector(".about__title") || row;
+        // The row hugs its text (see .about__row CSS), so binding to the
+        // row itself makes the floating photo appear while the pointer
+        // is anywhere over the entry — title or description — but not
+        // in the empty space past it.
+        const target = row;
 
         target.addEventListener("mouseenter", () => {
           floater.innerHTML = "";
@@ -2362,27 +2363,32 @@ const testimonials = [
     gap: var(--item-gap);
   }
   /* Each entry: title tight over its description; 32px between entries
-     is .about's own gap. The row carries no cursor or hover treatment
-     — the interactive target is the whole title line (.about__title,
-     rendered as an <a> when the entry has a url), hugging its text so
-     it never extends past the words or onto the description. */
+     is .about's own gap. The whole entry (title + description) is the
+     interactive target — rendered as an <a> when it has a url — and
+     hugs its text (align-self) so the hit area never extends past the
+     words. */
   .about__row {
+    align-self: flex-start;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
     gap: 4px;
   }
+  a.about__row {
+    cursor: pointer;
+    color: inherit;
+    text-decoration: none;
+  }
+  a.about__row:hover .u,
+  a.about__row:focus-visible .u {
+    animation: u-redraw 480ms cubic-bezier(0.65, 0, 0.35, 1);
+  }
   .about__title {
-    align-self: flex-start;
     max-width: 100%;
     font-size: var(--size-label);
     line-height: 1.35;
     letter-spacing: var(--track-hero);
     font-weight: 500;
-  }
-  a.about__title { cursor: pointer; }
-  a.about__title:hover .u,
-  a.about__title:focus-visible .u {
-    animation: u-redraw 480ms cubic-bezier(0.65, 0, 0.35, 1);
   }
   .about__badge {
     font-family: var(--face-mono);
