@@ -229,8 +229,14 @@ const testimonials = [
     name: "Marc-André Robert",
     role: "CEO",
     org: "Nectar",
-    quote:
-      "Thomas’ expertise and commitment to product excellence had a significant impact on our company’s launch and growth. The deep understanding of the beekeeping industry he quickly developed, the ability to translate user needs into innovative features, his collaborative approach, vision and interpersonal abilities were key assets to Nectar. Thomas will undoubtedly bring value to any organization!",
+    // `quote` can be a plain string, or an array of parts where a
+    // { em: "…" } part renders in solid black instead of the muted
+    // grey — pull out whatever phrase should stand out.
+    quote: [
+      "Thomas’ expertise and commitment to product excellence had ",
+      { em: "a significant impact on our company’s launch and growth" },
+      ". The deep understanding of the beekeeping industry he quickly developed, the ability to translate user needs into innovative features, his collaborative approach, vision and interpersonal abilities were key assets to Nectar. Thomas will undoubtedly bring value to any organization!",
+    ],
   },
   {
     name: "Jesse White",
@@ -326,12 +332,12 @@ const testimonials = [
         <section class="hero">
           <div class="hero__para reveal-item" style="--i: 0">
             <h1 class="hero__h1">Product design for complex B2B products.</h1>{" "}
-            poblete.design is the internet footprint of designer{" "}
+            poblete.design is the internet footprint of<br />designer{" "}
             <a class="u em hero__name" href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer">Thomas Poblete</a>.
           </div>
           <p class="hero__para reveal-item" style="--i: 1">
-            15 years: ① learning how professionals work ② untangling operational
-            workflows, and ③ shipping products they rely on.
+            15 years building a practice around ① learning how professionals work ② untangling operational
+            workflows, and ③ shipping digital products they rely on.
           </p>
           <p class="hero__para reveal-item" style="--i: 2">
             Recent chapters include building products and design practices with <a class="u" href={NECTAR_URL} target="_blank" rel="noopener noreferrer">Nectar</a> and <a class="u" href={RELION_URL} target="_blank" rel="noopener noreferrer">Relion</a>. Now working fractionally, with AI and code increasingly part of the practice.
@@ -388,13 +394,17 @@ const testimonials = [
                 style={`--i: ${i + 1}`}
                 data-photos={item.photos.length > 0 ? JSON.stringify(item.photos) : undefined}
               >
-                <p class="about__title">
-                  {item.badge && <span class="about__badge">{item.badge}</span>}
-                  {item.role} •{" "}
-                  {item.url
-                    ? <a class="u" href={item.url} target="_blank" rel="noopener noreferrer">{item.org}</a>
-                    : <span class="u">{item.org}</span>}
-                </p>
+                {item.url ? (
+                  <a class="about__title" href={item.url} target="_blank" rel="noopener noreferrer">
+                    {item.badge && <span class="about__badge">{item.badge}</span>}
+                    {item.role} • <span class="u">{item.org}</span>
+                  </a>
+                ) : (
+                  <p class="about__title">
+                    {item.badge && <span class="about__badge">{item.badge}</span>}
+                    {item.role} • <span class="u">{item.org}</span>
+                  </p>
+                )}
                 {item.stats && <p class="about__desc">{item.stats}</p>}
               </div>
             ))}
@@ -427,7 +437,13 @@ const testimonials = [
                 <p class="testimonial__text">
                   <span class="testimonial__name">{t.name}, {t.role}, {t.org}</span>
                   <br />
-                  <span class="testimonial__quote">{t.quote}</span> {testimonials.length > 1 && <span class="u testimonial__next">Next</span>}
+                  <span class="testimonial__quote">
+                    {(Array.isArray(t.quote) ? t.quote : [t.quote]).map((part) =>
+                      typeof part === "string"
+                        ? part
+                        : <span class="testimonial__em">{part.em}</span>
+                    )}
+                  </span> {testimonials.length > 1 && <span class="u testimonial__next">Next</span>}
                 </p>
               </div>
             ))}
@@ -555,7 +571,7 @@ const testimonials = [
   <div class="story-modal" id="story-modal" role="dialog" aria-modal="true" tabindex="-1" data-open="false" data-visible="false">
     <div class="story-modal__scroll">
       {detailStories.map((s) => (
-        <article class="story-modal__body" data-story={s.slug} hidden>
+        <article class={`story-modal__body${s.story ? "" : " story-modal__body--gallery"}`} data-story={s.slug} hidden>
           {s.story ? (
             <>
               <p class="story-modal__title" id={`story-modal-heading-${s.slug}`}>{s.story.title}</p>
@@ -821,10 +837,10 @@ const testimonials = [
         }
         if (!Array.isArray(photos) || photos.length === 0) return;
 
-        // Bind to the org name (.about__title .u — link or plain span),
-        // not the whole row, so the floating photo only appears while
-        // the pointer is over that word.
-        const target = row.querySelector(".about__title .u") || row;
+        // Bind to the whole title line (.about__title), not the row, so
+        // the floating photo appears while the pointer is anywhere over
+        // the text but not beyond it or over the description.
+        const target = row.querySelector(".about__title") || row;
 
         target.addEventListener("mouseenter", () => {
           floater.innerHTML = "";
@@ -1756,6 +1772,20 @@ const testimonials = [
     padding: 208px calc(var(--strip) * 1.5) var(--pad-bottom) var(--strip);
   }
 
+  /* Gallery-only body ("A messier visual archive of my work") — no
+     title/eyebrow/lede, so the 208px top padding is just dead space.
+     Pull it up and let the grid run the full width of the modal. */
+  .story-modal__scroll:has(.story-modal__body--gallery:not([hidden])) {
+    max-width: none;
+    padding: 64px 0 var(--pad-bottom);
+  }
+  .story-modal__body--gallery .story-modal__gallery {
+    width: 100%;
+    margin-left: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
   /* Switching stories (next/prev) pushes the outgoing body out and the
      incoming one in from the opposite side, driven by data-leaving/
      data-entering (see switchStory() in the script) — a "next page"
@@ -2306,18 +2336,26 @@ const testimonials = [
   }
   /* Each entry: title tight over its description; 32px between entries
      is .about's own gap. The row carries no cursor or hover treatment
-     — only the org link inside .about__title is interactive (underline
-     redraw comes from the global .u:hover). */
+     — the interactive target is the whole title line (.about__title,
+     rendered as an <a> when the entry has a url), hugging its text so
+     it never extends past the words or onto the description. */
   .about__row {
     display: flex;
     flex-direction: column;
     gap: 4px;
   }
   .about__title {
+    align-self: flex-start;
+    max-width: 100%;
     font-size: var(--size-label);
     line-height: 1.35;
     letter-spacing: var(--track-hero);
     font-weight: 500;
+  }
+  a.about__title { cursor: pointer; }
+  a.about__title:hover .u,
+  a.about__title:focus-visible .u {
+    animation: u-redraw 480ms cubic-bezier(0.65, 0, 0.35, 1);
   }
   .about__badge {
     font-family: var(--face-mono);
@@ -2414,6 +2452,8 @@ const testimonials = [
     letter-spacing: -0.02em;
     color: var(--grey-3);
   }
+  /* Highlighted span within a quote — solid black against the muted grey. */
+  .testimonial__em { color: var(--black); }
   .testimonial:hover .u {
     animation: u-redraw 480ms cubic-bezier(0.65, 0, 0.35, 1);
   }
