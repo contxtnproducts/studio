@@ -1801,9 +1801,10 @@ const testimonials = [
 
   /* --- Spread layout (experiment) ---------------------------------
      A story with layout: "spread" keeps the normal content width and
-     vertical scroll, but sets the body in two balanced columns. Title,
-     attributes, full-width images and the pull-quote span both. Only
-     the modal — the standalone /stories/ page stays a plain article. */
+     vertical scroll, but sets the body in two balanced columns. Title
+     + attributes ride in the first column; full-width images and the
+     pull-quote span both. Only the modal — the standalone /stories/
+     page stays a plain article. */
   .story-modal__body--spread {
     column-count: 2;
     column-gap: 3rem;
@@ -1817,9 +1818,16 @@ const testimonials = [
   .story-modal__body--spread .story-modal__heading {
     break-after: avoid;
   }
+  /* title + attributes sit in column one, trimmed to fit it */
+  .story-modal__body--spread .story-modal__title {
+    font-size: 22px;
+    line-height: 1.25;
+    margin-bottom: 20px;
+  }
+  .story-modal__body--spread .story-modal__attrs {
+    margin-bottom: 28px;
+  }
   /* span both columns */
-  .story-modal__body--spread .story-modal__title,
-  .story-modal__body--spread .story-modal__attrs,
   .story-modal__body--spread .story-modal__image--full,
   .story-modal__body--spread .story-modal__quote {
     column-span: all;
