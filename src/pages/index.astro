@@ -2223,6 +2223,12 @@ const testimonials = [
     column-gap: 16px;
     padding: 24px 0;
   }
+  /* Collapse the outer rows' vertical padding so the section's own
+     --section-y is the whole gap to the separator — otherwise it
+     stacks on the 24px row padding and Stories reads much more padded
+     than every other section. Between-row spacing (24+24) is untouched. */
+  .table__row:first-child { padding-top: 0; }
+  .table__row:last-child { padding-bottom: 0; }
   /* position: relative anchors .table__soon below. */
   .table__row[data-dim="true"] {
     position: relative;
