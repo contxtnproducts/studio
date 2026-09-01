@@ -143,18 +143,15 @@ const segments = [];
 
       {segments.map((seg) =>
         seg.kind === "mats" ? (
-          // A run of full-width screenshots as one continuous tinted
-          // band, bled to the content edges. Lazy — well down the page.
-          <div class="story__mats">
-            {seg.blocks.map((block) => (
-              <img
-                class="story__mat"
-                src={block.src}
-                alt={block.alt}
-                loading="lazy"
-              />
-            ))}
-          </div>
+          // Full-width screenshots. Each PNG already carries its own
+          // blush card + padding (see the image-*-full.png files), so
+          // these just get sized, rounded and spaced. Lazy — well down
+          // the page.
+          seg.blocks.map((block) => (
+            <figure class="story__shot">
+              <img src={block.src} alt={block.alt} loading="lazy" />
+            </figure>
+          ))
         ) : (
           <div class="story__flow">
             {seg.blocks.map((block) => {
@@ -488,22 +485,18 @@ const segments = [];
     opacity: 0.8;
   }
 
-  /* Mat band — a run of full-width screenshots on one continuous
-     tinted panel, bled to the content-frame edges. */
-  .story__mats {
-    display: flex;
-    flex-direction: column;
-    gap: 48px;
-    padding: 24px var(--strip);
-    background: var(--mat);
+  /* Full-width screenshots. The blush card + inner padding is part of
+     each PNG (image-*-full.png), so this only sizes, rounds and insets
+     them — no background/padding of our own. */
+  .story__shot {
+    margin: 0;
+    padding: 0 var(--strip);
   }
-  .story__mat {
+  .story__shot img {
     display: block;
     width: 100%;
-    aspect-ratio: 2048 / 1152;
     height: auto;
-    object-fit: cover;
-    border-radius: 6px;
+    border-radius: 16px;
   }
 
   @media (max-width: 1024px) {
@@ -542,9 +535,8 @@ const segments = [];
       padding-left: 16px;
       border-left: 2px solid var(--main);
     }
-    .story__mats {
-      padding: 16px 20px;
-      gap: 32px;
+    .story__shot {
+      padding: 0;
     }
   }
 </style>

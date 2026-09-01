@@ -18,7 +18,6 @@
   --paper-card: #fdfdfd;   /* the content card fill (Container) */
   --paper:      #ffffff;   /* true white — pills, other raised surfaces */
   --strip-bg:   #fffdf9;   /* margin strip fill (Intercalaire), "Washed Yellow" */
-  --mat:        #ede4e5;   /* tinted panel behind full-width story screenshots */
   --main:       #ff4f27;   /* accent: emphasis, footer, section labels */
   --border:     #ffa38f;   /* soft orange, story-modal edge only */
   --black:      #000000;
