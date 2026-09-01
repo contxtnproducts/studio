@@ -31,6 +31,30 @@ const attributes = [
   ["Stage", stage],
   ["Tags", tags?.join(" ; ")],
 ].filter(([, value]) => value);
+
+// The body runs in a narrow measure with a margin column for asides
+// (quotes); `full` images break out of that measure to the content
+// edges on a tinted mat. Group the block list into segments so the
+// narrow grid + its rule wrap only the running text, and each full
+// image sits between segments at full width. (`break` blocks only mean
+// something in the modal's shelved spread layout — dropped here.)
+const segments = [];
+{
+  let run = [];
+  const flushRun = () => {
+    if (run.length) segments.push({ kind: "flow", blocks: run });
+    run = [];
+  };
+  for (const block of blocks) {
+    if (block.type === "image" && block.variant !== "enclosed") {
+      flushRun();
+      segments.push({ kind: "full", block });
+    } else if (block.type !== "break") {
+      run.push(block);
+    }
+  }
+  flushRun();
+}
 ---
 
 <Base title={`${title} — poblete.design`} description={summary}>
@@ -108,54 +132,54 @@ const attributes = [
         </dl>
       )}
 
-      {blocks.map((block) => {
-        switch (block.type) {
-          case "heading":
-            return (
-              <p class="story__pad story__heading">{block.text}</p>
-            );
-          case "paragraph":
-            return (
-              <p class="story__pad story__paragraph">{block.text}</p>
-            );
-          case "list":
-            return (
-              <ul class="story__pad story__list">
-                {block.items.map((item) => <li>{item}</li>)}
-              </ul>
-            );
-          case "quote":
-            return (
-              <div class="story__quote">
-                <p class="story__pad story__quote-text">{block.text}</p>
-              </div>
-            );
-          case "image":
-            // enclosed images sit right under the title/attributes, so
-            // they're usually the first thing on screen (and the page's
-            // LCP element) — eager/high-priority rather than lazy, so
-            // they're not still popping in mid-slide-transition. Full-
-            // width ones (below) are further down the page and stay
-            // lazy.
-            return block.variant === "enclosed" ? (
-              <div class="story__pad story__image story__image--enclosed">
-                <img src={block.src} alt={block.alt} loading="eager" fetchpriority="high" />
-                {block.caption && <p class="story__caption">{block.caption}</p>}
-              </div>
-            ) : (
-              <div class="story__image story__image--full">
-                <img src={block.src} alt={block.alt} loading="lazy" />
-                {block.caption && <p class="story__caption story__pad">{block.caption}</p>}
-              </div>
-            );
-          case "break":
-            // Column breaks only mean something in the modal's spread
-            // layout — nothing to render on the single-column page.
-            return null;
-          default:
-            return null;
-        }
-      })}
+      {segments.map((seg) =>
+        seg.kind === "full" ? (
+          // Full-width screenshot on a tinted mat, bled to the content
+          // edges. Lazy — these sit well down the page.
+          <figure class="story__image story__image--full">
+            <img src={seg.block.src} alt={seg.block.alt} loading="lazy" />
+            {seg.block.caption && (
+              <figcaption class="story__caption">{seg.block.caption}</figcaption>
+            )}
+          </figure>
+        ) : (
+          <div class="story__flow">
+            {seg.blocks.map((block) => {
+              switch (block.type) {
+                case "heading":
+                  return <p class="story__heading">{block.text}</p>;
+                case "paragraph":
+                  return <p class="story__paragraph">{block.text}</p>;
+                case "list":
+                  return (
+                    <ul class="story__list">
+                      {block.items.map((item) => <li>{item}</li>)}
+                    </ul>
+                  );
+                case "quote":
+                  // Drops into the margin column beside the text.
+                  return <p class="story__aside">{block.text}</p>;
+                case "image":
+                  // enclosed — sits in the measure. Usually the first
+                  // thing on screen (the LCP element), so eager.
+                  return (
+                    <div class="story__image story__image--enclosed">
+                      <img
+                        src={block.src}
+                        alt={block.alt}
+                        loading="eager"
+                        fetchpriority="high"
+                      />
+                      {block.caption && <p class="story__caption">{block.caption}</p>}
+                    </div>
+                  );
+                default:
+                  return null;
+              }
+            })}
+          </div>
+        )
+      )}
     </article>
   </div>
 
@@ -200,6 +224,11 @@ const attributes = [
     display: flex;
     align-items: stretch;
     min-height: 100vh;
+    /* Body-layout geometry — the narrow reading measure, the margin
+       column for asides, and the gap between them (rule sits mid-gap). */
+    --story-measure: 492px;
+    --story-aside: 204px;
+    --story-col-gap: 56px;
   }
 
   /* --- Margin strip -------------------------------------------- */
@@ -304,7 +333,7 @@ const attributes = [
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 32px;
+    gap: 40px;
     padding: 96px 0 96px var(--strip);
     /* No border-left here — .story-peek's own border-right already
        marks this same boundary (both sit at the same x: strip width +
@@ -326,7 +355,7 @@ const attributes = [
     line-height: var(--leading-hero);
     letter-spacing: var(--track-hero);
     font-weight: 400;
-    max-width: 601px;
+    max-width: 820px;
   }
 
   .story__attrs {
@@ -351,29 +380,79 @@ const attributes = [
     font-family: var(--face-mono);
   }
 
+  /* --- Body: narrow measure + margin column --------------------
+     A run of running text (heading / paragraph / list / enclosed
+     image) sits in a ~492px measure; a quote (.story__aside) floats
+     out into the reserved gutter on the right, at its source-order
+     vertical position, with a hairline rule between — the rule only
+     shows on runs that actually carry a note. `full` images render
+     outside this container (see .story__image--full). Geometry vars
+     (--story-measure / --story-aside / --story-col-gap) live on
+     .story above. */
+  .story__flow {
+    position: relative;
+    padding-left: var(--strip);
+    /* content box is exactly measure + gap + aside wide, so a right
+       float lands flush in the gutter and text keeps its measure */
+    max-width: calc(
+      var(--strip) + var(--story-measure) + var(--story-col-gap) +
+        var(--story-aside)
+    );
+  }
+  .story__flow > * {
+    min-width: 0;
+    max-width: var(--story-measure);
+  }
+  .story__flow > * + * {
+    margin-top: 24px;
+  }
+  .story__aside {
+    float: right;
+    clear: right;
+    width: var(--story-aside);
+    margin-top: 0;
+    margin-bottom: 8px;
+    max-width: none;
+    font-family: var(--face-mono);
+    font-style: italic;
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+    color: var(--black);
+  }
+  /* the rule — only on runs with a margin note */
+  .story__flow:has(.story__aside)::before {
+    content: "";
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: calc(
+      var(--strip) + var(--story-measure) + (var(--story-col-gap) / 2)
+    );
+    width: 1px;
+    background: var(--grey-1);
+  }
+
   .story__heading {
     font-family: var(--face-mono);
     font-size: 21px;
     line-height: 1.5;
     letter-spacing: -0.02em;
     color: var(--main);
-    max-width: 601px;
   }
   .story__paragraph {
-    font-size: 21px;
+    font-size: 18px;
     line-height: 1.5;
     letter-spacing: -0.02em;
     color: #333;
-    max-width: 601px;
   }
   .story__list {
-    max-width: 601px;
-    font-size: 21px;
+    font-size: 18px;
     line-height: 1.5;
     letter-spacing: -0.02em;
-    color: var(--black);
+    color: #333;
     list-style: disc;
-    padding-left: calc(var(--strip) + 32px);
+    padding-left: 20px;
   }
   .story__list li {
     margin-bottom: 8px;
@@ -382,35 +461,29 @@ const attributes = [
     margin-bottom: 0;
   }
 
-  .story__quote {
-    background: #f9f9f9;
-    width: 100%;
-  }
-  .story__quote-text {
-    max-width: 908px;
-    box-sizing: border-box;
-    padding-top: 64px;
-    padding-bottom: 64px;
-    font-family: var(--face-mono);
-    font-style: italic;
-    font-size: 25px;
-    line-height: 1.5;
-    letter-spacing: -0.02em;
-    color: var(--black);
-  }
-
   .story__image--enclosed img {
     display: block;
     width: 100%;
-    max-width: 601px;
+    max-width: var(--story-measure);
+    aspect-ratio: 1840 / 1035;
     height: auto;
     object-fit: cover;
+    opacity: 0.8;
+  }
+  /* Full-width screenshot on a tinted mat, bled to the content edges. */
+  .story__image--full {
+    margin: 0;
+    padding: 24px var(--strip);
+    background: var(--mat);
+    border-radius: 12px;
   }
   .story__image--full img {
     display: block;
     width: 100%;
+    aspect-ratio: 2048 / 1152;
     height: auto;
     object-fit: cover;
+    border-radius: 6px;
   }
   .story__caption {
     margin-top: 8px;
@@ -420,6 +493,9 @@ const attributes = [
     letter-spacing: var(--track-mast);
     color: var(--black);
     max-width: 320px;
+  }
+  .story__image--full .story__caption {
+    padding-left: var(--strip);
   }
 
   @media (max-width: 1024px) {
@@ -434,6 +510,31 @@ const attributes = [
     .story-peek,
     .story-actions {
       display: none;
+    }
+    /* One column — the margin note folds back into the flow as an
+       indented aside, and the mat loses its wide side padding. */
+    .story__flow {
+      display: block;
+      padding-left: 32px;
+      padding-right: 48px;
+    }
+    .story__flow > *,
+    .story__flow > * + * {
+      max-width: 601px;
+    }
+    .story__flow:has(.story__aside)::before {
+      display: none;
+    }
+    .story__aside {
+      margin: 20px 0;
+      padding-left: 16px;
+      border-left: 2px solid var(--main);
+    }
+    .story__image--full {
+      padding: 16px 20px;
+    }
+    .story__image--full .story__caption {
+      padding-left: 0;
     }
   }
 </style>

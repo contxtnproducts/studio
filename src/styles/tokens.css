@@ -18,6 +18,7 @@
   --paper-card: #fdfdfd;   /* the content card fill (Container) */
   --paper:      #ffffff;   /* true white — pills, other raised surfaces */
   --strip-bg:   #fffdf9;   /* margin strip fill (Intercalaire), "Washed Yellow" */
+  --mat:        #ede4e5;   /* tinted panel behind full-width story screenshots */
   --main:       #ff4f27;   /* accent: emphasis, footer, section labels */
   --border:     #ffa38f;   /* soft orange, story-modal edge only */
   --black:      #000000;
@@ -37,7 +38,7 @@
      set to value/14.4vw so it resolves to exactly the flat value at
      1440px and shrinks from there. */
   --size-lede:      1.8rem;    /* 28.8px — hero prose (incl. the h1); 10% under the 32px Figma spec */
-  --size-hero:      1.875rem;  /* 30px — story-detail titles (modal + [slug]) */
+  --size-hero:      2.375rem;  /* 38px — story-detail titles (modal + [slug]), mono */
   --size-story:     1.5rem;    /* 24px — stories table titles */
   --size-foot:      1rem;      /* 16px, flat */
   --size-mast:      0.875rem;  /* 14px — pills, body-minor, captions */
@@ -89,7 +90,7 @@
 @media (max-width: 1440px) {
   :root {
     --size-lede:  clamp(1.2375rem, 2vw, 1.8rem);
-    --size-hero:  clamp(1.375rem, 2.083vw, 1.875rem);
+    --size-hero:  clamp(1.75rem, 2.639vw, 2.375rem);
     --size-story: clamp(1.125rem, 1.667vw, 1.5rem);
 
     --pad-x:       clamp(28px, 5vw, 72px);

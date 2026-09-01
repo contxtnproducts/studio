@@ -16,19 +16,18 @@ blocks:
     variant: enclosed
 
   - type: heading
-    text: "Challenge"
+    text: "1.0 Challenge"
+  - type: quote
+    text: "How to support different organizational structures (including ones we haven't encountered yet) without over-engineering?"
   - type: paragraph
     text: "Post-seed, turning Relion's MVP into a scalable product meant laying the foundations of its organization model: hierarchy, roles, permissions and sharing."
   - type: paragraph
     text: "Patterns emerging from sales and product discovery showed that every organization we approached was structured differently."
   - type: paragraph
-    text: "Some operators outsource maintenance to multiple service providers. Others delegate issue resolution to charger manufacturers. Some service providers manage chargers on behalf of multiple customers. Cities may split operations and field work across local entities. Etc, etc. Hence the question:"
-
-  - type: quote
-    text: "How to support different organizational structures (including ones we haven't encountered yet) without over-engineering?"
+    text: "Some operators outsource maintenance to multiple service providers. Others delegate issue resolution to charger manufacturers. Some service providers manage chargers on behalf of multiple customers. Cities may split operations and field work across local entities. Etc, etc."
 
   - type: heading
-    text: "Response"
+    text: "2.0 Response"
   - type: paragraph
     text: "Working closely with the CPTO and engineering team, we took a few informed bets and converged on a small set of composable primitives:"
   - type: list
@@ -41,7 +40,7 @@ blocks:
     text: "This foundation* now underpins every screen and workflow in Relion, supporting hundreds of operators, manufacturers and service providers working together to maintain large networks of chargers."
 
   - type: heading
-    text: "A few more screens"
+    text: "3.0 A few more screens"
   - type: paragraph
     text: "Shaped by the foundations described above."
   - type: image
