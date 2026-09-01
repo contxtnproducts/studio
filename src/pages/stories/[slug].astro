@@ -33,27 +33,36 @@ const attributes = [
 ].filter(([, value]) => value);
 
 // The body runs in a narrow measure with a margin column for asides
-// (quotes); `full` images break out of that measure to the content
-// edges on a tinted mat. Group the block list into segments so the
-// narrow grid + its rule wrap only the running text, and each full
-// image sits between segments at full width. (`break` blocks only mean
-// something in the modal's shelved spread layout — dropped here.)
+// (quotes); `full` images break out of that measure onto a tinted mat
+// that bleeds to the content edges. Group the block list into
+// segments: runs of running text ("flow"), and runs of consecutive
+// full images ("mats") which render as one continuous mat band.
+// (`break` blocks only mean something in the modal's shelved spread
+// layout — dropped here.)
 const segments = [];
 {
   let run = [];
+  let mats = [];
   const flushRun = () => {
     if (run.length) segments.push({ kind: "flow", blocks: run });
     run = [];
   };
+  const flushMats = () => {
+    if (mats.length) segments.push({ kind: "mats", blocks: mats });
+    mats = [];
+  };
   for (const block of blocks) {
+    if (block.type === "break") continue;
     if (block.type === "image" && block.variant !== "enclosed") {
       flushRun();
-      segments.push({ kind: "full", block });
-    } else if (block.type !== "break") {
+      mats.push(block);
+    } else {
+      flushMats();
       run.push(block);
     }
   }
   flushRun();
+  flushMats();
 }
 ---
 
@@ -133,15 +142,19 @@ const segments = [];
       )}
 
       {segments.map((seg) =>
-        seg.kind === "full" ? (
-          // Full-width screenshot on a tinted mat, bled to the content
-          // edges. Lazy — these sit well down the page.
-          <figure class="story__image story__image--full">
-            <img src={seg.block.src} alt={seg.block.alt} loading="lazy" />
-            {seg.block.caption && (
-              <figcaption class="story__caption">{seg.block.caption}</figcaption>
-            )}
-          </figure>
+        seg.kind === "mats" ? (
+          // A run of full-width screenshots as one continuous tinted
+          // band, bled to the content edges. Lazy — well down the page.
+          <div class="story__mats">
+            {seg.blocks.map((block) => (
+              <img
+                class="story__mat"
+                src={block.src}
+                alt={block.alt}
+                loading="lazy"
+              />
+            ))}
+          </div>
         ) : (
           <div class="story__flow">
             {seg.blocks.map((block) => {
@@ -362,6 +375,8 @@ const segments = [];
     display: flex;
     flex-direction: column;
     gap: var(--row-gap);
+    /* extra breathing room before the body (Figma Heading pb-56) */
+    margin-bottom: 32px;
     font-size: var(--size-mast);
     line-height: var(--leading-mast);
   }
@@ -410,7 +425,8 @@ const segments = [];
     float: right;
     clear: right;
     width: var(--story-aside);
-    margin-top: 0;
+    /* lift it to sit level with the section label it annotates */
+    margin-top: -24px;
     margin-bottom: 8px;
     max-width: none;
     font-family: var(--face-mono);
@@ -446,56 +462,48 @@ const segments = [];
     letter-spacing: -0.02em;
     color: #333;
   }
+  /* The principle statements read as plain paragraphs in the mockup —
+     no bullets, just paragraph spacing. */
   .story__list {
     font-size: 18px;
     line-height: 1.5;
     letter-spacing: -0.02em;
     color: #333;
-    list-style: disc;
-    padding-left: 20px;
+    list-style: none;
+    padding-left: 0;
   }
-  .story__list li {
-    margin-bottom: 8px;
-  }
-  .story__list li:last-child {
-    margin-bottom: 0;
+  .story__list li + li {
+    margin-top: 16px;
   }
 
+  .story__image--enclosed {
+    max-width: var(--story-measure);
+  }
   .story__image--enclosed img {
     display: block;
     width: 100%;
-    max-width: var(--story-measure);
     aspect-ratio: 1840 / 1035;
     height: auto;
     object-fit: cover;
     opacity: 0.8;
   }
-  /* Full-width screenshot on a tinted mat, bled to the content edges. */
-  .story__image--full {
-    margin: 0;
+
+  /* Mat band — a run of full-width screenshots on one continuous
+     tinted panel, bled to the content-frame edges. */
+  .story__mats {
+    display: flex;
+    flex-direction: column;
+    gap: 48px;
     padding: 24px var(--strip);
     background: var(--mat);
-    border-radius: 12px;
   }
-  .story__image--full img {
+  .story__mat {
     display: block;
     width: 100%;
     aspect-ratio: 2048 / 1152;
     height: auto;
     object-fit: cover;
     border-radius: 6px;
-  }
-  .story__caption {
-    margin-top: 8px;
-    font-family: var(--face-mono);
-    font-size: var(--size-mast);
-    line-height: var(--leading-mast);
-    letter-spacing: var(--track-mast);
-    color: var(--black);
-    max-width: 320px;
-  }
-  .story__image--full .story__caption {
-    padding-left: var(--strip);
   }
 
   @media (max-width: 1024px) {
@@ -512,9 +520,10 @@ const segments = [];
       display: none;
     }
     /* One column — the margin note folds back into the flow as an
-       indented aside, and the mat loses its wide side padding. */
+       indented aside, and the mat band loses its wide side padding. */
     .story__flow {
       display: block;
+      max-width: none;
       padding-left: 32px;
       padding-right: 48px;
     }
@@ -526,15 +535,16 @@ const segments = [];
       display: none;
     }
     .story__aside {
+      float: none;
+      width: auto;
+      max-width: 601px;
       margin: 20px 0;
       padding-left: 16px;
       border-left: 2px solid var(--main);
     }
-    .story__image--full {
+    .story__mats {
       padding: 16px 20px;
-    }
-    .story__image--full .story__caption {
-      padding-left: 0;
+      gap: 32px;
     }
   }
 </style>

@@ -10,11 +10,6 @@ context: "End-to-end platform supporting EV charging infra across stakeholders"
 stage: "Post-seed, just joined"
 tags: ["Seed", "0→1", "Architecture", "Multi-stakeholder"]
 blocks:
-  - type: image
-    src: "/shots/stories/relion-org-model/image-77-enclosed.png"
-    alt: "A service van and charging equipment in a maintenance bay, from a Relion field visit."
-    variant: enclosed
-
   - type: heading
     text: "1.0 Challenge"
   - type: quote
@@ -30,6 +25,10 @@ blocks:
     text: "2.0 Response"
   - type: paragraph
     text: "Working closely with the CPTO and engineering team, we took a few informed bets and converged on a small set of composable primitives:"
+  - type: image
+    src: "/shots/stories/relion-org-model/image-77-enclosed.png"
+    alt: "A service van and charging equipment in a maintenance bay, from a Relion field visit."
+    variant: enclosed
   - type: list
     items:
       - "Organizations contain users, locations and chargers, and can be recursively nested to represent structures of any depth."
