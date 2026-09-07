@@ -32,8 +32,23 @@ const block = z.discriminatedUnion('type', [
     // them); outside it, full and bleed look the same.
     variant: z.enum(['enclosed', 'full', 'bleed']),
     caption: z.string().optional(),
+    // Enclosed-only: render wider than the text measure (e.g. 130 for
+    // 130%) while staying inline in the flow, centered so it overhangs
+    // evenly on both sides. Unset/100 = flush with the measure like
+    // any other enclosed image. Capped at 180 — the margin-note gutter
+    // it overhangs into is 235px wide at the 477px measure, so much
+    // beyond that risks clipping/overlapping a note. Ignored on
+    // full/bleed, which already break out into their own section.
+    width: z.number().min(100).max(180).optional(),
   }),
-  z.object({ type: z.literal('quote'), text: z.string() }),
+  // A margin note beside the body column. `side` picks the gutter
+  // (Figma "Desktop - 44" has notes in both the left and right
+  // margins); left-side notes are set flush-right against the column.
+  z.object({
+    type: z.literal('quote'),
+    text: z.string(),
+    side: z.enum(['left', 'right']).default('right'),
+  }),
   // Manual section break for the spread layout — ends the current
   // two-column section and starts a fresh one below it. A no-op in the
   // single-column layouts.
@@ -76,4 +91,26 @@ const writing = defineCollection({
   schema: shared,
 });
 
-export const collections = { work, writing };
+// Captions for the "visual archive" gallery (see mockupsGallery() in
+// index.astro). The filename itself still controls layout (order/size
+// /mat — see that function's own comment); this only maps a filename
+// to its caption text, kept separate because a caption can run to a
+// full sentence, which doesn't fit safely in a filename the way a
+// short title does. A typo'd `file` here just means that image falls
+// back to its filename-derived title — see mockupsGallery() — rather
+// than failing the build, since (unlike `work`) there's no way to
+// cross-check a caption's `file` against the actual images on disk
+// from inside a Zod schema.
+const mockups = defineCollection({
+  loader: glob({ pattern: '**/*.md', base: './src/content/mockups' }),
+  schema: z.object({
+    captions: z.array(
+      z.object({
+        file: z.string(),
+        caption: z.string(),
+      })
+    ).default([]),
+  }),
+});
+
+export const collections = { work, writing, mockups };

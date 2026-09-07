@@ -35,27 +35,67 @@ function photosFor(slug) {
 //     <order>-<size>[-<mat>]-<title>.<ext>
 //
 //   order   digits — controls the sequence          01, 2, 10, …
-//   size    sm | md | lg | full — width of the cell  ⅓ · ½ · ⅔ · full
+//   size    sm | md | lg | full | bleed[NN] — width  ⅓ · ½ · ⅔ · full ·
+//           of the cell. `bleed` is full — but the IMAGE overhangs the
+//           modal's own padding, running edge to edge of the panel,
+//           while its mat/background stays put at content width (a
+//           magazine bleed: photo runs off the page, the tint block
+//           doesn't). Optional trailing digits scale the image's width
+//           as a percent of that full-bleed span — `bleed80` pulls it
+//           back to ~content width, `bleed` / `bleed100` = flush to the
+//           panel edges. Anything over 100 is clipped by the modal.
 //   mat     OPTIONAL — 6 hex digits set the mat      e9e9e9, bbc5bb, …
 //           colour behind the image; the word `none` drops the mat
 //           entirely (for a transparent PNG — image sits on the panel
 //           with no box or frame); omit for the default light grey
-//   title   free text; dashes/underscores → spaces   shown on hover / as alt
+//   title   free text; dashes/underscores → spaces   alt text only
 //   ext     png | jpg | jpeg | webp | gif | avif
 //
 //   e.g.  01-full-e9e9e9-fleetflash-board.png  ·  06-sm-none-nectar-logo.png
+//         04-bleed-e9e9e9-hero.png  ·  05-bleed80-none-wide-diagram.png
 //
 // Each image sits inset on its mat, keeping its own aspect ratio; the
 // grid backfills gaps (auto-flow: dense). Adding, removing, resizing,
 // recolouring or reordering is just the filenames — no code change.
+//
+// FOLDERS — on top of the flat drop-in above, a subdirectory of
+// public/shots/mockups/ named:
+//
+//     <folderOrder>_<title>            e.g.  0_field-notes/ · 1_relion/
+//
+// groups the images inside it (same <order>-<size>[-<mat>]-<title>
+// filename convention as loose files, ordered within the folder) into
+// one contiguous run in the same continuous collage. Loose files
+// sitting directly in public/shots/mockups/ render first (by their
+// order), then each folder in <folderOrder> order. Folders are a
+// pure authoring/ordering convenience — the page renders them exactly
+// as if every image were loose in one flat grid: no divider, no
+// heading, no extra spacing. Nesting is one level only — subdirectories
+// of a folder are ignored.
+//
+// The filename's title is alt text only, not a caption — it's
+// deliberately short, and a real caption can run to a full sentence,
+// which doesn't fit in a filename (spaces/punctuation aren't
+// filename-safe). The `mockups` content collection
+// (src/content/mockups/captions.md — see content.config.ts) maps
+// filename → caption text; an image with no entry there gets no
+// caption at all (no hover tooltip) rather than falling back to its
+// title — silence, not a lesser caption, is the deliberate default.
+// For a foldered image the caption key is its path relative to
+// public/shots/mockups/ (e.g. "1_relion/02-md-relion-board.png"); a
+// bare-filename key is still honoured as a fallback.
 const MOCKUPS_GALLERY_DIR = fileURLToPath(new URL("../../public/shots/mockups/", import.meta.url));
-const GALLERY_FILE_RE = /^(\d+)-(sm|md|lg|full)(?:-([0-9a-f]{6}|none))?-(.+)\.(png|jpe?g|webp|gif|avif)$/i;
-const GALLERY_SPAN = { sm: 4, md: 6, lg: 8, full: 12 }; // columns of a 12-col grid
+const GALLERY_FILE_RE = /^(\d+)-(sm|md|lg|full|bleed\d{0,3})(?:-([0-9a-f]{6}|none))?-(.+)\.(png|jpe?g|webp|gif|avif)$/i;
+const GALLERY_FOLDER_RE = /^(\d+)[_-](.+)$/;
+const GALLERY_SPAN = { sm: 4, md: 6, lg: 8, full: 12, bleed: 12 }; // columns of a 12-col grid
 
-function mockupsGallery() {
+// One directory's worth of gallery images, parsed + ordered. `dir` is
+// the path relative to MOCKUPS_GALLERY_DIR ("" for the top level);
+// it prefixes both the served URL and the caption lookup key.
+function galleryImagesIn(absDir, dir, captions) {
   let files;
   try {
-    files = fs.readdirSync(MOCKUPS_GALLERY_DIR);
+    files = fs.readdirSync(absDir);
   } catch {
     return [];
   }
@@ -64,17 +104,55 @@ function mockupsGallery() {
       const m = f.match(GALLERY_FILE_RE);
       if (!m) return null;
       const mat = m[3] ? m[3].toLowerCase() : null;
+      const label = m[4].replace(/[-_]+/g, " ").trim();
+      const rel = dir ? `${dir}/${f}` : f;
+      // size token is `sm`/`md`/`lg`/`full`, or `bleed` with optional
+      // trailing digits (`bleed`, `bleed80`) — split the word from the
+      // percent so `bleed` alone defaults to a flush 100.
+      const [, size, factor] = m[2].toLowerCase().match(/^([a-z]+)(\d*)$/);
       return {
-        file: `/shots/mockups/${f}`,
+        file: `/shots/mockups/${rel}`,
         order: Number(m[1]),
-        span: GALLERY_SPAN[m[2].toLowerCase()],
+        span: GALLERY_SPAN[size],
+        bleed: size === "bleed" ? (factor ? Number(factor) : 100) : null,
         bg: mat && mat !== "none" ? `#${mat}` : null,
         bare: mat === "none",
-        label: m[4].replace(/[-_]+/g, " ").trim(),
+        label,
+        caption: captions[rel] ?? captions[f] ?? null,
       };
     })
     .filter((x) => x !== null)
     .sort((a, b) => a.order - b.order);
+}
+
+function mockupsGallery(captions) {
+  let entries;
+  try {
+    entries = fs.readdirSync(MOCKUPS_GALLERY_DIR, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  // Loose top-level images, exactly as before.
+  const items = galleryImagesIn(MOCKUPS_GALLERY_DIR, "", captions);
+
+  // Then each <folderOrder>_<title> subdirectory's images, appended in
+  // folder order. Nothing marks the seam — the folder is invisible on
+  // the page, just a way to keep the source files tidy.
+  const folders = entries
+    .filter((e) => e.isDirectory())
+    .map((e) => {
+      const m = e.name.match(GALLERY_FOLDER_RE);
+      return m ? { name: e.name, order: Number(m[1]) } : null;
+    })
+    .filter((x) => x !== null)
+    .sort((a, b) => a.order - b.order);
+
+  for (const folder of folders) {
+    items.push(...galleryImagesIn(`${MOCKUPS_GALLERY_DIR}${folder.name}`, folder.name, captions));
+  }
+
+  return items;
 }
 
 const LINKEDIN_URL = "https://www.linkedin.com/in/poblete/";
@@ -109,6 +187,9 @@ const stories = (await getCollection("work")).sort((a, b) => a.data.order - b.da
 // can't be a `work` collection entry the way org-model/Nectar are —
 // "Or a visual repository →" in the hero is the one trigger for this
 // today.
+const mockupCaptionEntries = (await getCollection("mockups")).flatMap((e) => e.data.captions);
+const mockupCaptions = Object.fromEntries(mockupCaptionEntries.map((c) => [c.file, c.caption]));
+
 const moreDetails = [
   {
     slug: "mockups",
@@ -118,7 +199,7 @@ const moreDetails = [
       lede: "",
       sections: [
         {
-          images: mockupsGallery(),
+          images: mockupsGallery(mockupCaptions),
         },
       ],
     },
@@ -147,7 +228,39 @@ const detailStories = [
         ["Stage", stage],
         ["Tags", tags?.join(" ; ")],
       ].filter(([, value]) => value);
-      return { slug: s.id, story: { title, attributes, blocks, layout } };
+      // `-next` = redesign scratch: same modal shell, but its panel
+      // renders the "Desktop - 44" layout — hero (.story-modal__*--next)
+      // + a body section (.story-modal__section-next) whose blocks are
+      // grouped into note-anchored rows, mirroring
+      // src/pages/stories/next/[slug].astro. A `quote` attaches as the
+      // margin note of the next body block; a trailing quote rides the
+      // last row. `enclosed` images are their own row inline in the
+      // flow; `full`/`bleed` peel off into `shots`. `break` is a no-op.
+      const isNext = s.id.endsWith("-next");
+      let rows = null;
+      let shots = null;
+      if (isNext) {
+        rows = [];
+        shots = [];
+        let pendingNote = null;
+        for (const block of blocks) {
+          if (block.type === "quote") { pendingNote = block; continue; }
+          if (block.type === "image") {
+            if (block.variant === "enclosed") {
+              rows.push({ block, note: pendingNote });
+              pendingNote = null;
+            } else {
+              shots.push(block);
+            }
+            continue;
+          }
+          if (block.type === "break") continue;
+          rows.push({ block, note: pendingNote });
+          pendingNote = null;
+        }
+        if (pendingNote && rows.length) rows[rows.length - 1].note = pendingNote;
+      }
+      return { slug: s.id, isNext, rows, shots, story: { title, attributes, blocks, layout } };
     }),
   ...moreDetails,
 ];
@@ -410,7 +523,7 @@ const testimonials = [
             workflows, and ③ shipping digital products they rely on.
           </p>
           <p class="hero__para reveal-item" style="--i: 2">
-            Recent chapters include building products and design practices with <a class="u" href={NECTAR_URL} target="_blank" rel="noopener noreferrer">Nectar</a> and <a class="u" href={RELION_URL} target="_blank" rel="noopener noreferrer">Relion</a>. Now working fractionally, with AI and code increasingly part of the practice.
+            Recent chapters include building the product and design practices of startup <a class="u" href={NECTAR_URL} target="_blank" rel="noopener noreferrer">Nectar</a> and <a class="u" href={RELION_URL} target="_blank" rel="noopener noreferrer">Relion</a>. Now working fractionally, with AI and code increasingly part of the practice.
           </p>
           <p class="hero__para reveal-item" style="--i: 3">
             <a class="u" href="#stories">Stories from the field</a> ↓
@@ -435,6 +548,10 @@ const testimonials = [
               // in-page modal on a plain click (see the script) while
               // cmd/middle-click still gets the real page.
               const linked = s.data.active && !s.data.draft;
+              // `-next` = redesign scratch: opens the shared modal like
+              // any other row, but its crawlable route lives under
+              // /stories/next/ (see src/pages/stories/next/[slug].astro).
+              const isNext = s.id.endsWith("-next");
               return (
                 <div
                   class={`table__row reveal-item${dim ? " table__row--dim" : ""}`}
@@ -444,7 +561,7 @@ const testimonials = [
                   <p class="table__num">{num}</p>
                   <p class="table__title">
                     {linked
-                      ? <a class="table__link" href={`/stories/${s.id}/`} data-open-story={s.id}>{s.data.title}</a>
+                      ? <a class="table__link" href={isNext ? `/stories/next/${s.id}/` : `/stories/${s.id}/`} data-open-story={s.id}>{s.data.title}</a>
                       : s.data.title}
                   </p>
                   {dim && <span class="table__soon">Soon</span>}
@@ -641,21 +758,103 @@ const testimonials = [
   <div class="story-modal" id="story-modal" role="dialog" aria-modal="true" tabindex="-1" data-open="false" data-visible="false">
     <div class="story-modal__scroll">
       {detailStories.map((s) => (
-        <article class={`story-modal__body${s.story ? (s.story.layout === "spread" ? " story-modal__body--spread" : "") : " story-modal__body--gallery"}`} data-story={s.slug} hidden>
+        <article class={`story-modal__body${s.story ? (s.story.layout === "spread" ? " story-modal__body--spread" : "") : " story-modal__body--gallery"}${s.isNext ? " story-modal__body--next" : ""}`} data-story={s.slug} hidden>
           {s.story ? (
             <>
-              <p class="story-modal__title" id={`story-modal-heading-${s.slug}`}>{s.story.title}</p>
-              {s.story.attributes.length > 0 && (
-                <dl class="story-modal__attrs">
-                  {s.story.attributes.map(([label, value]) => (
-                    <div class="story-modal__attr">
-                      <dt>{label}</dt>
-                      <dd>{value}</dd>
-                    </div>
-                  ))}
-                </dl>
+              {s.isNext ? (
+                // Redesign heading — Figma "Desktop - 44" node
+                // 1679:3274. Same title/attrs data, different box:
+                // 752px measure, black text, 16px between the two
+                // groups (each with its own pb-24), hairline Grey 1
+                // divider below. Mirrors .story__heading in
+                // src/pages/stories/next/[slug].astro.
+                <header class="story-modal__heading-next">
+                  <p class="story-modal__title" id={`story-modal-heading-${s.slug}`}>{s.story.title}</p>
+                  {s.story.attributes.length > 0 && (
+                    <dl class="story-modal__attrs story-modal__attrs--next">
+                      {s.story.attributes.map(([label, value]) => (
+                        <div class="story-modal__attr">
+                          <dt>{label}</dt>
+                          <dd>{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </header>
+              ) : (
+                <>
+                  <p class="story-modal__title" id={`story-modal-heading-${s.slug}`}>{s.story.title}</p>
+                  {s.story.attributes.length > 0 && (
+                    <dl class="story-modal__attrs">
+                      {s.story.attributes.map(([label, value]) => (
+                        <div class="story-modal__attr">
+                          <dt>{label}</dt>
+                          <dd>{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </>
               )}
-              {s.story.layout === "spread"
+              {s.isNext ? (
+                <>
+                  {/* Body section — Figma "Desktop - 44" node 1679:3292.
+                     Centred 477px measure with a 235px margin-note
+                     gutter each side (57px clear); notes are absolutely
+                     placed and anchor to the top of their row. Mirrors
+                     .story__section in src/pages/stories/next/[slug].astro. */}
+                  {s.rows.length > 0 && (
+                    <section class="story-modal__section-next">
+                      <div class="story-modal__sn-body">
+                        {s.rows.map((row) => (
+                          <div class={`story-modal__sn-row story-modal__sn-row--${row.block.type}`}>
+                            {row.note && (
+                              <p class={`story-modal__sn-note story-modal__sn-note--${row.note.side}`}>{row.note.text}</p>
+                            )}
+                            {row.block.type === "heading" && (
+                              <p class="story-modal__sn-heading">{row.block.text}</p>
+                            )}
+                            {row.block.type === "paragraph" && (
+                              <p class="story-modal__sn-para">{row.block.text}</p>
+                            )}
+                            {row.block.type === "list" && (
+                              <p class="story-modal__sn-list">
+                                {row.block.items.map((item, j) => (
+                                  <Fragment>{j > 0 && <br />}{`→ ${item}`}</Fragment>
+                                ))}
+                              </p>
+                            )}
+                            {row.block.type === "image" && (
+                              <figure
+                                class="story-modal__sn-image"
+                                style={row.block.width ? `--img-width:${row.block.width}%` : undefined}
+                              >
+                                <img src={row.block.src} alt={row.block.alt} loading="lazy" />
+                                {row.block.caption && (
+                                  <figcaption class="story-modal__sn-image-caption">{row.block.caption}</figcaption>
+                                )}
+                              </figure>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                  {/* Screenshots — nodes 1679:3334-8. Full-width, inset
+                     72px each side, stacked flush, native 16:9. Mirrors
+                     .story__shots in the standalone template. */}
+                  {s.shots.length > 0 && (
+                    <section class="story-modal__sn-shots">
+                      {s.shots.map((shot) => (
+                        <figure class="story-modal__sn-shot">
+                          <img src={shot.src} alt={shot.alt} loading="lazy" />
+                          {shot.caption && <figcaption class="story-modal__sn-shot-caption">{shot.caption}</figcaption>}
+                        </figure>
+                      ))}
+                    </section>
+                  )}
+                </>
+              ) : s.story.layout === "spread"
                 ? splitSpreadSections(s.story.blocks).map((group) => (
                     <div
                       class={`story-modal__section-group${group.kind === "full" ? " story-modal__section-group--full" : ""}`}
@@ -748,10 +947,11 @@ const testimonials = [
                     <div class="story-modal__gallery">
                       {sec.images.map((img) => (
                         <figure
-                          class={`story-modal__cell${img.span === 12 ? " story-modal__cell--full" : ""}${img.bare ? " story-modal__cell--bare" : ""}`}
-                          style={`--span: ${img.span};${img.bg ? ` --cell-bg: ${img.bg};` : ""}`}
+                          class={`story-modal__cell${img.bleed != null ? " story-modal__cell--bleed" : img.span === 12 ? " story-modal__cell--full" : ""}${img.bare ? " story-modal__cell--bare" : ""}`}
+                          style={`--span: ${img.span};${img.bg ? ` --cell-bg: ${img.bg};` : ""}${img.bleed != null ? ` --bleed: ${img.bleed / 100};` : ""}`}
                         >
                           <img src={img.file} alt={img.label} loading="lazy" />
+                          {img.caption && <figcaption class="story-modal__cell-caption">{img.caption}</figcaption>}
                         </figure>
                       ))}
                     </div>
@@ -764,6 +964,11 @@ const testimonials = [
       ))}
     </div>
   </div>
+
+  <!-- Cursor-anchored caption card for the redesign story's
+       screenshots. Sits outside #story-modal so its position: fixed
+       isn't captured by the modal's own transform. -->
+  <p class="shot-tip" aria-hidden="true"></p>
 
   <script is:inline>
     // Plain page load — no client-side router here (real full-page
@@ -1372,6 +1577,63 @@ const testimonials = [
       if (initialSlug && storySlugs.includes(initialSlug)) open(initialSlug);
     })();
 
+    // Redesign story screenshots + the mockups archive grid — caption
+    // text that tracks the cursor while a mouse hovers a shot/cell. The
+    // figures live inside (hidden) modal panels, so listeners bind once
+    // and fire only when a panel is open. Touch / narrow gets a static
+    // caption instead (see .story-modal__sn-shot-caption and
+    // .story-modal__cell-caption in the media query). No animation: the
+    // caption shows, moves and hides instantly — CSS carries no
+    // transition, this just sets the text and the cursor position.
+    (function () {
+      const tip = document.querySelector(".shot-tip");
+      const shots = document.querySelectorAll(".story-modal__sn-shot, .story-modal__cell");
+      if (!tip || !shots.length) return;
+      const GAP = 16;
+      let lx = 0, ly = 0, raf = 0;
+      function place() {
+        raf = 0;
+        const w = tip.offsetWidth, h = tip.offsetHeight;
+        let x = lx + GAP, y = ly + GAP;
+        if (x + w > window.innerWidth - 12) x = lx - GAP - w;
+        if (y + h > window.innerHeight - 12) y = ly - GAP - h;
+        tip.style.setProperty("--tip-x", x + "px");
+        tip.style.setProperty("--tip-y", y + "px");
+      }
+      function track(e) {
+        lx = e.clientX;
+        ly = e.clientY;
+        if (!raf) raf = requestAnimationFrame(place);
+      }
+      function show(text) {
+        tip.textContent = text;
+        tip.classList.add("is-visible");
+        place();
+      }
+      function hide() {
+        tip.classList.remove("is-visible");
+      }
+      shots.forEach((fig) => {
+        const cap = fig.querySelector(".story-modal__sn-shot-caption, .story-modal__cell-caption");
+        if (!cap) return;
+        fig.addEventListener("pointerenter", (e) => {
+          if (e.pointerType !== "mouse") return;
+          track(e);
+          show(cap.textContent);
+        });
+        fig.addEventListener("pointermove", (e) => {
+          if (e.pointerType === "mouse") track(e);
+        });
+        fig.addEventListener("pointerleave", (e) => {
+          if (e.pointerType === "mouse") hide();
+        });
+      });
+      // Closing a story shouldn't leave the tip stranded on screen.
+      document.getElementById("story-modal")?.addEventListener("transitionend", () => {
+        if (document.getElementById("story-modal").dataset.visible !== "true") hide();
+      });
+    })();
+
     // Hero headline word rotation — "complex" retypes itself as each
     // of these in turn, forever. Currently DISCONNECTED: the hero
     // markup has no #hero-rotate element (reverted — felt like too
@@ -1759,19 +2021,17 @@ const testimonials = [
   .story-modal {
     position: fixed;
     top: 0;
+    /* Spans to the true viewport edge so THIS element's scrollbar sits
+       at the browser edge, like a native page scrollbar. The visible
+       card doesn't reach here — .story-modal__scroll carries the
+       background/border and is width-capped to end exactly at the main
+       content column's right edge; the gap between that edge and the
+       scrollbar shows the frozen page, mirroring #story-peek on the
+       left. Drops nothing here in the narrow layout — see below. */
     right: 0;
     bottom: 0;
     left: calc(var(--strip) * 2);
     z-index: 30;
-    background: var(--paper);
-    border-left: 1px solid var(--border);
-    /* The scroll region is this element itself, not
-       .story-modal__scroll — that just carries the width cap/padding
-       now. Scrolling here means the scrollbar renders at the true
-       right edge of the viewport (this element already spans to
-       right:0), same place a native page scrollbar would sit,
-       instead of appearing part-way across the screen at the content
-       column's own edge. */
     overflow-y: auto;
     opacity: 0;
     /* Slides in from the right, like a page being pushed on top of
@@ -1876,16 +2136,23 @@ const testimonials = [
     transform: translate(0, -50%);
   }
 
-  /* Same box model as .content — max-width and box-sizing match
-     exactly, so opening a story reads as "the content column gained
-     a page" rather than some unrelated modal appearing. Just the
-     width cap and padding — #story-modal itself is the scroll region
-     (see above), not this. Top padding (208px, from the Figma frame)
-     is its own thing — see .story-modal__title. */
+  /* The visible card. #story-modal itself is the scroll region and
+     runs to the viewport edge (scrollbar there); this element carries
+     the background + left edge and is width-capped so its right edge
+     lands exactly on the content card's (.frame's) own right edge —
+     the modal is a page pushed on top of that card, so it spans the
+     same column, not the narrower section text measure. The frame is
+     capped at --frame and left-aligned with a 1px right border, so:
+     min(100vw, --frame) minus the two 72px bands on the left, minus
+     that 1px border. 100vw (not 100%) so the cap ignores this modal's
+     own scrollbar. .frame's border-right is the divider on that
+     edge — no border of our own here. */
   .story-modal__scroll {
     box-sizing: border-box;
-    width: 100%;
-    max-width: var(--content-max);
+    width: calc(min(100vw, var(--frame)) - var(--strip) * 2 - 1px);
+    min-height: 100%;
+    background: var(--paper);
+    border-left: 1px solid var(--border);
     /* Left padding is a flat 72px (var(--strip)) rather than
        var(--pad-x) like .content — matches the strip's own width, so
        strip + peek + this padding forms a consistent 72px rhythm
@@ -1897,10 +2164,14 @@ const testimonials = [
   /* Gallery-only body ("A messier visual archive of my work") — no
      title/eyebrow/lede, so the 208px top padding is just dead space.
      Even inset on all four sides (equal top/bottom/left/right); the
-     grid fills what's left rather than breaking out. */
+     grid fills what's left rather than breaking out. --gallery-pad
+     mirrors this padding so a `bleed` cell can re-add it to reach the
+     panel edge without hard-coding the number (tightens on phone —
+     see the 680px query). */
   .story-modal__scroll:has(.story-modal__body--gallery:not([hidden])) {
     max-width: none;
     padding: 64px;
+    --gallery-pad: 64px;
   }
   .story-modal__body--gallery .story-modal__gallery {
     width: 100%;
@@ -2144,6 +2415,214 @@ const testimonials = [
     margin: 0;
     font-family: var(--face-mono);
   }
+
+  /* --- Redesign heading (Figma "Desktop - 44" node 1679:3274) ------
+     Only the `-next` scratch panel. Mirrors .story__heading in
+     src/pages/stories/next/[slug].astro: pt-88 (via the scroll
+     override), px stays the shared 72px, pb-72 + hairline Grey 1
+     divider, 752px measure, black text. Vertical rhythm inside is set
+     by the title's own padding-bottom (24px), not a flex gap; the
+     space below the whole block is the heading's 72px pb, matched to
+     its 72px left inset. */
+  .story-modal__scroll:has(.story-modal__body--next:not([hidden])) {
+    padding-top: 88px;
+    /* No bottom padding of our own — every -next section (hero, body,
+       shots) already carries its own, so --pad-bottom here would just
+       double it. Same as the standalone .story__content. */
+    padding-bottom: 0;
+  }
+  .story-modal__heading-next {
+    display: flex;
+    flex-direction: column;
+    /* Full-bleed divider — the rule runs the whole width of the page,
+       not just the text measure. Same breakout technique as
+       .story-modal__quote below (negative margin + re-added padding,
+       `100% + both scroll paddings` so it stops at .story-modal__scroll's
+       cap rather than fighting the modal's own scrollbar). The title
+       and attributes keep their 72px inset via the re-added padding. */
+    box-sizing: border-box;
+    width: calc(100% + var(--strip) + var(--strip) * 1.5);
+    margin-left: calc(-1 * var(--strip));
+    padding: 0 calc(var(--strip) * 1.5) 72px var(--strip);
+    border-bottom: 1px solid var(--grey-1);
+  }
+  .story-modal__heading-next .story-modal__title {
+    max-width: 752px;
+    margin: 0;
+    padding-bottom: 24px;
+    color: var(--black);
+  }
+  .story-modal__attrs--next {
+    max-width: 752px;
+    margin: 0;
+    /* No own padding-bottom — the space under the block is the
+       heading's own 72px pb (see .story-modal__heading-next), kept
+       visually equal to its 72px left inset. */
+    gap: 16px; /* tighter than the shared --row-gap (24px) */
+    letter-spacing: var(--track-hero); /* -0.02em, per Figma tracking-[-0.28px] */
+    color: var(--black);
+  }
+
+  /* --- Body section — node 1679:3292 (mirror of .story__section in
+     src/pages/stories/next/[slug].astro) --------------------------
+     Full-bleed like .story-modal__heading-next so its bottom rule
+     spans the modal; the 477px measure is centred in the full modal
+     width and each note is absolutely placed into a 235px gutter,
+     57px clear of the measure, anchored to the top of its row. */
+  .story-modal__section-next {
+    --note-w: 235px;
+    --note-gap: 57px;
+    --measure: 477px;
+    box-sizing: border-box;
+    width: calc(100% + var(--strip) + var(--strip) * 1.5);
+    margin-left: calc(-1 * var(--strip));
+    padding: 72px 0;
+    border-bottom: 1px solid var(--grey-1);
+  }
+  .story-modal__sn-body {
+    max-width: var(--measure);
+    margin: 0 auto;
+  }
+  .story-modal__sn-row {
+    position: relative;
+  }
+  /* 24px between blocks, 16px within a paragraph run / before a list,
+     56px of breathing before a section heading. */
+  .story-modal__sn-row + .story-modal__sn-row { margin-top: 24px; }
+  .story-modal__sn-row--paragraph + .story-modal__sn-row--paragraph,
+  .story-modal__sn-row--paragraph + .story-modal__sn-row--list { margin-top: 16px; }
+  .story-modal__sn-row + .story-modal__sn-row--heading { margin-top: 56px; }
+  .story-modal__sn-row + .story-modal__sn-row--image { margin-top: 32px; }
+  .story-modal__sn-row--image + .story-modal__sn-row { margin-top: 32px; }
+  .story-modal__sn-body > .story-modal__sn-row:first-child { margin-top: 0; }
+
+  .story-modal__sn-heading {
+    font-family: var(--face-mono);
+    font-size: 21px;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+    color: var(--main);
+  }
+  .story-modal__sn-para {
+    font-family: var(--face-sans);
+    font-size: 18px;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+    color: #333;
+  }
+  .story-modal__sn-list {
+    font-family: var(--face-sans);
+    font-size: 18px;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+    color: var(--black);
+  }
+  .story-modal__sn-note {
+    position: absolute;
+    /* Nudge down so the note's first-line baseline sits on the body
+       text's first baseline (14px/1.5 note vs 18px/1.5 body — their
+       first-baseline offsets differ by ~4.5px). */
+    top: 4px;
+    width: var(--note-w);
+    margin: 0;
+    font-family: var(--face-mono);
+    font-style: italic;
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+    color: var(--black);
+  }
+  .story-modal__sn-note--left {
+    right: calc(100% + var(--note-gap));
+    text-align: right;
+  }
+  .story-modal__sn-note--right {
+    left: calc(100% + var(--note-gap));
+  }
+
+  /* Enclosed image — inline in the measure (mirrors .story__image in
+     src/pages/stories/next/[slug].astro), cropped to a consistent
+     ratio regardless of source dimensions. */
+  .story-modal__sn-image {
+    /* --img-width is set inline per-block (see width in
+       content.config.ts); default 100% keeps it flush with the
+       measure like any other row. Negative margin centers the
+       overhang evenly on both sides. */
+    --img-width: 100%;
+    width: var(--img-width);
+    margin-left: calc((100% - var(--img-width)) / 2);
+  }
+  .story-modal__sn-image img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1840 / 1035;
+    height: auto;
+    object-fit: cover;
+    border-radius: 8px;
+  }
+  .story-modal__sn-image-caption {
+    margin: 12px 0 0;
+    font-family: var(--face-mono);
+    font-size: var(--size-mast);
+    line-height: var(--leading-mast);
+    letter-spacing: var(--track-mast);
+    color: var(--grey-3);
+  }
+
+  /* Screenshots — nodes 1679:3334-8 (mirror of .story__shots in
+     src/pages/stories/next/[slug].astro). Full-bleed like the body
+     section, then inset 72px each side; stacked flush, native 16:9.
+     The mat / rounded card / shadow are part of each PNG. */
+  .story-modal__sn-shots {
+    box-sizing: border-box;
+    width: calc(100% + var(--strip) + var(--strip) * 1.5);
+    margin-left: calc(-1 * var(--strip));
+    padding: 72px var(--strip) 96px;
+  }
+  .story-modal__sn-shot {
+    margin: 0;
+  }
+  .story-modal__sn-shot img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 2048 / 1152;
+    height: auto;
+    object-fit: cover;
+  }
+  /* Desktop: the caption rides in the cursor-tracking .shot-tip below;
+     this element is just its data source. Returns as a static caption
+     under the image in the narrow layout. */
+  .story-modal__sn-shot-caption {
+    display: none;
+  }
+  /* Same treatment as the stories table's "Soon" caption
+     (.table__soon) and the action-rail tips — mono, --size-mast,
+     --track-mast, black, no card; just wraps and clamps to the
+     viewport since it's a sentence, not a word. */
+  .shot-tip {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 40;
+    max-width: 300px;
+    margin: 0;
+    font-family: var(--face-mono);
+    font-size: var(--size-mast);
+    line-height: var(--leading-mast);
+    letter-spacing: var(--track-mast);
+    color: var(--black);
+    pointer-events: none;
+    /* No animation — instant show/move/hide. `translate` carries the
+       cursor position (set on pointermove by the script). */
+    translate: var(--tip-x, 0) var(--tip-y, 0);
+  }
+  .shot-tip:not(.is-visible) {
+    visibility: hidden;
+  }
+  @media (hover: none) {
+    .shot-tip { display: none; }
+  }
+
   .story-modal__heading {
     font-family: var(--face-mono);
     font-size: 21px;
@@ -2279,6 +2758,30 @@ const testimonials = [
     height: auto;
     border-radius: 3px;
   }
+  /* bleed: the figure (the mat) keeps its content-width box and its
+     --cell-bg / rounded corners; only the image breaks out. The mat's
+     horizontal padding drops to 0 so `width: 100%` on the image is the
+     content width, then --gallery-pad*2 re-adds the panel padding to
+     reach its edges, and --bleed (from the filename's `bleedNN`) scales
+     that span. The flex parent's justify-content:center makes the
+     overhang even on both sides — no negative margin. A little
+     vertical padding leaves the mat visible as a band above/below. */
+  .story-modal__cell--bleed {
+    min-height: 0;
+    padding: 24px 0;
+    overflow: visible;
+  }
+  .story-modal__cell--bleed img {
+    max-width: none;
+    max-height: none;
+    /* flex-shrink:0 — the figure is a flex box narrower than this
+       width; without it the item shrinks back to fit instead of
+       overhanging. justify-content:center on the figure then splits
+       the overhang evenly left/right. */
+    flex-shrink: 0;
+    width: calc((100% + var(--gallery-pad, 64px) * 2) * var(--bleed, 1));
+    border-radius: 0;
+  }
   /* `none` in the filename — transparent PNG: drop the mat and the
      rounded corners so the image reads as a cut-out on the panel. */
   .story-modal__cell--bare {
@@ -2286,6 +2789,14 @@ const testimonials = [
   }
   .story-modal__cell--bare img {
     border-radius: 0;
+  }
+  /* Desktop: the caption rides in the cursor-tracking .shot-tip (see
+     the script + .shot-tip rule below); this element is just its data
+     source — filename title, same text as the img's own alt. Returns
+     as a static caption under the image once the grid stacks to one
+     column (touch has no cursor to hover with anyway). */
+  .story-modal__cell-caption {
+    display: none;
   }
 
   /* --- Masthead ------------------------------------------------- */
@@ -2817,8 +3328,13 @@ const testimonials = [
        specific than a bare class and would otherwise win regardless
        of media query order. */
     .story-peek[data-open="true"] { display: none; }
-    .story-modal { left: 0; }
-    .story-modal__scroll { padding-top: 96px; padding-bottom: 40px; padding-left: 32px; padding-right: 48px; }
+    .story-modal { left: 0; right: 0; }
+    /* Full-bleed card here — no right cap (there's no visible content
+       card beside it at this width). */
+    .story-modal__scroll {
+      width: 100%;
+      padding-top: 96px; padding-bottom: 40px; padding-left: 32px; padding-right: 48px;
+    }
     /* .story-modal__scroll's own padding changed above (32/48 instead
        of strip/strip*1.5), so the breakout's re-added padding has to
        match: 100% + 32 + 48, same 100%-not-100vw reasoning as the
@@ -2829,6 +3345,47 @@ const testimonials = [
     .story-modal__quote { width: calc(100% + 32px + 48px); margin-left: -32px; }
     .story-modal__quote-text { padding-left: 32px; padding-right: 48px; }
     .story-modal__image--full { width: calc(100% + 32px + 48px); margin-left: -32px; }
+    /* Redesign body section — full-bleed maths follow the 32/48 scroll
+       padding here; the note gutters collapse and each note folds back
+       inline as an indented aside above the block it annotated. */
+    .story-modal__section-next {
+      width: calc(100% + 32px + 48px);
+      margin-left: -32px;
+      padding: 48px 32px;
+    }
+    .story-modal__sn-body { max-width: 601px; }
+    /* No gutter to bleed into once the margin notes fold into the
+       flow — keep enclosed images flush with the measure. !important
+       because --img-width is also set inline per-block (see width in
+       content.config.ts), which a plain override here can't beat. */
+    .story-modal__sn-image {
+      --img-width: 100% !important;
+    }
+    .story-modal__sn-note {
+      position: static;
+      width: auto;
+      max-width: 601px;
+      margin: 0 0 16px;
+      padding-left: 16px;
+      border-left: 2px solid var(--main);
+      text-align: left;
+    }
+    .story-modal__sn-shots {
+      width: calc(100% + 32px + 48px);
+      margin-left: -32px;
+      padding: 48px 32px 64px;
+    }
+    /* No cursor tooltips on touch — the caption returns as static
+       text under each screenshot. */
+    .story-modal__sn-shot-caption {
+      display: block;
+      margin: 12px 0 0;
+      font-family: var(--face-mono);
+      font-size: var(--size-mast);
+      line-height: var(--leading-mast);
+      letter-spacing: var(--track-mast);
+      color: var(--grey-3);
+    }
     /* Flow layout — one column: the margin note folds back inline as an
        indented aside, and screenshots use the full width. */
     .story-modal__flow { max-width: none; }
@@ -2854,8 +3411,28 @@ const testimonials = [
   @media (max-width: 680px) {
     .story-modal__scroll:has(.story-modal__body--gallery:not([hidden])) {
       padding: 32px;
+      --gallery-pad: 32px;
     }
     .story-modal__gallery { grid-template-columns: 1fr; gap: 16px; }
-    .story-modal__cell { grid-column: 1; min-height: 0; }
+    .story-modal__cell {
+      grid-column: 1;
+      min-height: 0;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    /* No cursor tooltips on touch — the caption returns as static
+       text under each mockup, centered under the image to match the
+       cell's own centered composition. */
+    .story-modal__cell-caption {
+      display: block;
+      margin: 0;
+      font-family: var(--face-mono);
+      font-size: var(--size-mast);
+      line-height: var(--leading-mast);
+      letter-spacing: var(--track-mast);
+      color: var(--grey-3);
+      text-align: center;
+    }
   }
 </style>

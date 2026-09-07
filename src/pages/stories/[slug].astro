@@ -10,9 +10,11 @@ import Base from "../../layouts/Base.astro";
 // story here entirely, same as the old `active:false` inert-row
 // treatment on the home page table did.
 export async function getStaticPaths() {
-  const entries = (await getCollection("work", ({ data }) => !data.draft)).sort(
-    (a, b) => a.data.order - b.data.order
-  );
+  // `-next` ids are the redesign scratch and route through
+  // stories/next/[slug].astro instead — kept out of this live template.
+  const entries = (
+    await getCollection("work", (e) => !e.data.draft && !e.id.endsWith("-next"))
+  ).sort((a, b) => a.data.order - b.data.order);
   return entries.map((entry, i) => ({
     params: { slug: entry.id },
     props: {
