@@ -1,19 +1,18 @@
 ---
 import { getCollection } from "astro:content";
 import Base from "../../layouts/Base.astro";
+import { circled, inline } from "../../lib/format";
 
-// One real, static, shareable route per published story — replaces
-// the old in-page .story-modal overlay for these (see index.astro's
-// history: that pattern still exists there for the "mockups" gallery,
-// which doesn't have a title/attributes shape and doesn't fit this
-// template). draft:true (the default — see content.config.ts) skips a
-// story here entirely, same as the old `active:false` inert-row
-// treatment on the home page table did.
+// The one story-detail layout (Figma "Desktop - 44", node 1679-3224):
+// a centred reading measure flanked by a margin-note gutter each side,
+// enclosed images inline, `full`/`bleed` images peeled into a stacked
+// full-width "shots" section after the body. index.astro's story modal
+// renders the same structure under its own `.story-modal__*` names.
+// draft:true (the default — see content.config.ts) skips a story here
+// entirely; every published one gets its route at /stories/<slug>/.
 export async function getStaticPaths() {
-  // `-next` ids are the redesign scratch and route through
-  // stories/next/[slug].astro instead — kept out of this live template.
   const entries = (
-    await getCollection("work", (e) => !e.data.draft && !e.id.endsWith("-next"))
+    await getCollection("work", (e) => !e.data.draft)
   ).sort((a, b) => a.data.order - b.data.order);
   return entries.map((entry, i) => ({
     params: { slug: entry.id },
@@ -31,78 +30,53 @@ const attributes = [
   ["Role", role],
   ["Context", context],
   ["Stage", stage],
-  ["Tags", tags?.join(" ; ")],
+  ["Tags", tags?.join(" , ")],
 ].filter(([, value]) => value);
 
-// The body runs in a narrow measure with a margin column for asides
-// (quotes); `full` images break out of that measure onto a tinted mat
-// that bleeds to the content edges. Group the block list into
-// segments: runs of running text ("flow"), and runs of consecutive
-// full images ("mats") which render as one continuous mat band.
-// (`break` blocks only mean something in the modal's shelved spread
-// layout — dropped here.)
-const segments = [];
+// Group the running-text blocks into rows: each row is one body block
+// (heading / paragraph / list / numbered / enclosed image) with an
+// optional margin note. A `quote` block attaches as the note of the
+// NEXT body block (it anchors to that row's top); a trailing quote
+// rides on the last row. `full`/`bleed` images peel off into `shots`
+// — their own stacked section after the body (Figma nodes 1679:3334-8).
+const rows = [];
+const shots = [];
 {
-  let run = [];
-  let mats = [];
-  const flushRun = () => {
-    if (run.length) segments.push({ kind: "flow", blocks: run });
-    run = [];
-  };
-  const flushMats = () => {
-    if (mats.length) segments.push({ kind: "mats", blocks: mats });
-    mats = [];
-  };
+  let pendingNote = null;
   for (const block of blocks) {
-    if (block.type === "break") continue;
-    if (block.type === "image" && block.variant !== "enclosed") {
-      flushRun();
-      mats.push(block);
-    } else {
-      flushMats();
-      run.push(block);
+    if (block.type === "quote") {
+      pendingNote = block;
+      continue;
     }
+    if (block.type === "image") {
+      if (block.variant === "enclosed") {
+        rows.push({ block, note: pendingNote });
+        pendingNote = null;
+      } else {
+        shots.push(block);
+      }
+      continue;
+    }
+    rows.push({ block, note: pendingNote });
+    pendingNote = null;
   }
-  flushRun();
-  flushMats();
+  if (pendingNote && rows.length) rows[rows.length - 1].note = pendingNote;
 }
 ---
 
 <Base title={`${title} — poblete.design`} description={summary}>
   <div class="story">
-    <!-- Margin strip — same fill/edge/punch treatment as the home
-         page's own .strip (see index.astro); CSS lives in Base.astro,
-         shared by both pages. This page is reached directly (a real
-         route, for shareable links/SEO/crawlers/no-JS) as often as
-         it's opened as the in-page modal from the home page (see
-         index.astro's own script) — the modal is the primary way
-         most visitors get here, this page's own chrome (strip, action
-         rail below) is what a direct visit or a full reload sees. -->
+    <!-- Margin strip + peek band + action rail — .strip/.strip::after
+         /.punch are global (Base.astro). Punch-hole offsets follow
+         Figma "Desktop - 44" (y 82 / 502 / 922). -->
     <div class="strip" aria-hidden="true">
-      <img class="punch" style="--t:56px" src="/shots/hole.png" alt="" />
-      <img class="punch" style="--t:382px" src="/shots/hole.png" alt="" />
-      <img class="punch" style="--t:652px" src="/shots/hole.png" alt="" />
+      <img class="punch" style="--t:82px" src="/shots/hole.png" alt="" />
+      <img class="punch" style="--t:502px" src="/shots/hole.png" alt="" />
+      <img class="punch" style="--t:922px" src="/shots/hole.png" alt="" />
     </div>
 
-    <!-- Peek band — a second 72px column, immediately after the real
-         margin strip, same spot index.astro's own #story-peek used to
-         occupy. That one showed the actual home page peeking through
-         (same document, modal overlay); a real separate page can't do
-         that live — there's no previous page still in the DOM to show
-         — so this is a static echo of the same translucent-wash
-         language instead: still visually a second band the story
-         content pushes in over, just not a live view of anything. -->
     <div class="story-peek" aria-hidden="true"></div>
 
-    <!-- Action rail — close/next/copy, same icons and same second band
-         (left: var(--strip), not 0 — that's .strip's own column) as
-         the in-page modal's own .story-actions in index.astro (a
-         separate element — this page and the modal aren't nested in
-         each other, see the comment by the strip above). Plain links
-         here rather than JS: reaching this page directly means
-         there's no modal/previous page in play, just a real page with
-         a real "back" (browser back / this href) and a real "next"
-         (the next story's own URL). Only copy-link still needs JS. -->
     <nav class="story-actions" aria-label="Story navigation">
       <a class="story-actions__btn" href={`/stories/${nextSlug}/`} aria-label="Next story">
         <svg class="story-actions__icon" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
@@ -128,78 +102,98 @@ const segments = [];
     </nav>
 
     <article class="story__content">
-      <div class="story__pad">
-        <h1 class="story__title">{title}</h1>
-      </div>
+      <!-- Hero — Figma node 1679:3274. pt-88 / px-72 / pb-72 inside the
+           content column, hairline Grey 1 divider below; the title's own
+           padding-bottom sets the gap to the attributes. -->
+      <header class="story__hero">
+        <div class="story__h1">
+          <h1 class="story__title">{title}</h1>
+        </div>
 
-      {attributes.length > 0 && (
-        <dl class="story__attrs story__pad">
-          {attributes.map(([label, value]) => (
-            <div class="story__attr">
-              <dt>{label}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
+        {attributes.length > 0 && (
+          <dl class="story__attrs">
+            {attributes.map(([label, value]) => (
+              <div class="story__attr">
+                <dt>{label}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </header>
+
+      {rows.length > 0 && (
+        <!-- Body section — node 1679:3292. Centred 477px measure + a
+             235px margin-note gutter each side (57px clear); notes are
+             absolutely placed and anchor to the top of their row. -->
+        <section class="story__section">
+          <div class="story__section-body">
+            {rows.map((row) => (
+              <div class={`story__row story__row--${row.block.type}`}>
+                {row.note && (
+                  <p class={`story__note story__note--${row.note.side}`}>{row.note.text}</p>
+                )}
+                {row.block.type === "heading" && (
+                  <p class="story__heading">{row.block.text}</p>
+                )}
+                {row.block.type === "paragraph" && (
+                  <p class="story__paragraph" set:html={inline(row.block.text)} />
+                )}
+                {row.block.type === "list" && (
+                  <div class="story__list">
+                    {row.block.items.map((item) => (
+                      <p set:html={`→ ${inline(item)}`} />
+                    ))}
+                  </div>
+                )}
+                {row.block.type === "numbered" && (
+                  <div class="story__list">
+                    {row.block.items.map((item, j) => (
+                      <p set:html={`${circled(j + 1)} ${inline(item)}`} />
+                    ))}
+                  </div>
+                )}
+                {row.block.type === "image" && (
+                  <figure
+                    class="story__image"
+                    style={row.block.width ? `--img-width:${row.block.width}%` : undefined}
+                  >
+                    <img src={row.block.src} alt={row.block.alt} loading="lazy" />
+                    {row.block.caption && (
+                      <figcaption class="story__image-caption">{row.block.caption}</figcaption>
+                    )}
+                  </figure>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
-      {segments.map((seg) =>
-        seg.kind === "mats" ? (
-          // Full-width screenshots. Each PNG already carries its own
-          // blush card + padding (see the image-*-full.png files), so
-          // these just get sized, rounded and spaced. Lazy — well down
-          // the page.
-          seg.blocks.map((block) => (
+      {shots.length > 0 && (
+        <!-- Screenshots — nodes 1679:3334-8. Full-width, inset 72px each
+             side, native 16:9, a standard gap between consecutive ones.
+             The mat + rounded card + shadow are baked into each PNG. -->
+        <section class="story__shots">
+          {shots.map((shot) => (
             <figure class="story__shot">
-              <img src={block.src} alt={block.alt} loading="lazy" />
+              <img src={shot.src} alt={shot.alt} loading="lazy" />
+              {shot.caption && <figcaption class="story__shot-caption">{shot.caption}</figcaption>}
             </figure>
-          ))
-        ) : (
-          <div class="story__flow">
-            {seg.blocks.map((block) => {
-              switch (block.type) {
-                case "heading":
-                  return <p class="story__heading">{block.text}</p>;
-                case "paragraph":
-                  return <p class="story__paragraph">{block.text}</p>;
-                case "list":
-                  return (
-                    <ul class="story__list">
-                      {block.items.map((item) => <li>{item}</li>)}
-                    </ul>
-                  );
-                case "quote":
-                  // Drops into the margin column beside the text.
-                  return <p class="story__aside">{block.text}</p>;
-                case "image":
-                  // enclosed — sits in the measure. Usually the first
-                  // thing on screen (the LCP element), so eager.
-                  return (
-                    <div class="story__image story__image--enclosed">
-                      <img
-                        src={block.src}
-                        alt={block.alt}
-                        loading="eager"
-                        fetchpriority="high"
-                      />
-                      {block.caption && <p class="story__caption">{block.caption}</p>}
-                    </div>
-                  );
-                default:
-                  return null;
-              }
-            })}
-          </div>
-        )
+          ))}
+        </section>
       )}
     </article>
   </div>
 
+  <!-- Shared cursor-anchored caption card for enclosed images + shots.
+       Lives outside .story so no transformed ancestor breaks its
+       position: fixed. Populated + moved by the script below; a static
+       caption under each image takes over on touch / narrow. -->
+  <p class="shot-tip" aria-hidden="true"></p>
+
   <script>
-    // Copy-link — same "flash the label, revert after a beat" pattern
-    // as the home page's own email-copy button, simplified: no
-    // fallback text needed since there's nothing sensitive to expose,
-    // just the current URL.
+    // Copy-link + Esc/L keys.
     (function () {
       const btn = document.getElementById("story-detail-copy");
       const tip = document.getElementById("story-detail-copy-tip");
@@ -228,6 +222,64 @@ const segments = [];
         }
       });
     })();
+
+    // Image captions — text that tracks the cursor while a mouse hovers
+    // an enclosed image or a full-width shot. Touch / narrow gets a
+    // static caption under the image instead (see .story__image-caption
+    // / .story__shot-caption in the media query). Show/hide are delayed
+    // so a quick pass-through, or crossing the seam between two stacked
+    // shots, doesn't make it flicker.
+    (function () {
+      const tip = document.querySelector(".shot-tip");
+      const figures = document.querySelectorAll(".story__image, .story__shot");
+      if (!tip || !figures.length) return;
+      const GAP = 16, SHOW_DELAY = 140, HIDE_DELAY = 260;
+      let lx = 0, ly = 0, raf = 0, showT = 0, hideT = 0;
+      const place = () => {
+        raf = 0;
+        const w = tip.offsetWidth, h = tip.offsetHeight;
+        let x = lx + GAP, y = ly + GAP;
+        if (x + w > window.innerWidth - 12) x = lx - GAP - w;
+        if (y + h > window.innerHeight - 12) y = ly - GAP - h;
+        tip.style.setProperty("--tip-x", x + "px");
+        tip.style.setProperty("--tip-y", y + "px");
+      };
+      const track = (e) => {
+        lx = e.clientX;
+        ly = e.clientY;
+        if (!raf) raf = requestAnimationFrame(place);
+      };
+      const requestShow = (cap) => {
+        clearTimeout(hideT);
+        if (tip.classList.contains("is-visible")) {
+          tip.textContent = cap.textContent;
+          return;
+        }
+        clearTimeout(showT);
+        showT = setTimeout(() => {
+          tip.textContent = cap.textContent;
+          place();
+          tip.classList.add("is-visible");
+        }, SHOW_DELAY);
+      };
+      const requestHide = () => {
+        clearTimeout(showT);
+        hideT = setTimeout(() => tip.classList.remove("is-visible"), HIDE_DELAY);
+      };
+      figures.forEach((fig) => {
+        const cap = fig.querySelector(".story__image-caption, .story__shot-caption");
+        if (!cap) return;
+        fig.addEventListener("pointerenter", (e) => {
+          if (e.pointerType !== "mouse") return;
+          track(e);
+          requestShow(cap);
+        });
+        fig.addEventListener("pointermove", (e) => {
+          if (e.pointerType === "mouse") track(e);
+        });
+        fig.addEventListener("pointerleave", requestHide);
+      });
+    })();
   </script>
 </Base>
 
@@ -236,23 +288,10 @@ const segments = [];
     display: flex;
     align-items: stretch;
     min-height: 100vh;
-    /* Body-layout geometry — the narrow reading measure, the margin
-       column for asides, and the gap between them (rule sits mid-gap). */
-    --story-measure: 492px;
-    --story-aside: 204px;
-    --story-col-gap: 56px;
   }
 
-  /* --- Margin strip -------------------------------------------- */
-  /* .strip/.strip::after/.punch live in Base.astro's global
-     stylesheet, not here — shared with index.astro, which renders the
-     identical markup. */
-
-  /* --- Peek band — second 72px column, right after .strip (left:
-     var(--strip), not 0 — that's .strip's own column). See the
-     markup comment for why this is a static wash rather than a live
-     peek of the previous page. Same translucent white + right border
-     as index.astro's own #story-peek used. --- */
+  /* --- Margin strip / peek / action rail ----------------------
+     .strip/.strip::after/.punch are global (Base.astro). */
   .story-peek {
     position: fixed;
     top: 0;
@@ -264,12 +303,6 @@ const segments = [];
     z-index: 1;
   }
 
-  /* --- Action rail — fixed in the peek band's own column (not
-     .strip's), so it stays put on scroll and reads as its own layer
-     above the wash (z-index 2 > peek's 1). Simplified from
-     index.astro's .story-actions: no open/close animation (nothing to
-     animate into — this is the page itself, not an overlay), so just
-     the hover-tip fade remains. --- */
   .story-actions {
     position: fixed;
     left: var(--strip);
@@ -339,48 +372,52 @@ const segments = [];
     transform: translate(0, -50%);
   }
 
-  /* --- Content column --- */
+  /* --- Content column ---------------------------------------- */
   .story__content {
     flex: 1 1 0;
     min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 40px;
-    padding: 96px 0 96px var(--strip);
-    /* No border-left here — .story-peek's own border-right already
-       marks this same boundary (both sit at the same x: strip width +
-       peek width), one line rather than two stacked on top of each
-       other. */
-  }
-  /* Text/enclosed content is inset by --strip on both sides (matching
-     the home page's own 72px rhythm); full-width images (below)
-     deliberately skip this to bleed to the column's own edge. */
-  .story__pad {
+    /* clears the relative strip (72) + the fixed peek band (another
+       72) that overlays this column's left edge */
     padding-left: var(--strip);
-    padding-right: calc(var(--strip) * 1.5);
-    box-sizing: border-box;
   }
 
+  /* --- Hero — node 1679:3274 -------------------------------- */
+  .story__hero {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 88px var(--strip) 72px;
+    border-bottom: 1px solid var(--grey-1);
+  }
+  .story__h1 {
+    width: 100%;
+    max-width: 752px;
+    padding-bottom: 24px;
+  }
   .story__title {
     font-family: var(--face-mono);
+    font-weight: 400;
     font-size: var(--size-hero);
     line-height: var(--leading-hero);
     letter-spacing: var(--track-hero);
-    font-weight: 400;
-    max-width: 820px;
+    color: var(--black);
   }
 
   .story__attrs {
+    width: 100%;
+    max-width: 752px;
+    margin: 0; /* <dl> — Base's reset covers p/ul/ol, not dl */
     display: flex;
     flex-direction: column;
-    gap: var(--row-gap);
-    /* extra breathing room before the body (Figma Heading pb-56) */
-    margin-bottom: 32px;
+    gap: 16px;
     font-size: var(--size-mast);
     line-height: var(--leading-mast);
+    letter-spacing: var(--track-hero);
+    color: var(--black);
   }
   .story__attr {
     display: flex;
+    align-items: center;
     gap: var(--row-gap);
   }
   .story__attr dt {
@@ -392,61 +429,40 @@ const segments = [];
   .story__attr dd {
     margin: 0;
     font-family: var(--face-mono);
+    font-weight: 400;
   }
 
-  /* --- Body: narrow measure + margin column --------------------
-     A run of running text (heading / paragraph / list / enclosed
-     image) sits in a ~492px measure; a quote (.story__aside) floats
-     out into the reserved gutter on the right, at its source-order
-     vertical position, with a hairline rule between — the rule only
-     shows on runs that actually carry a note. `full` images render
-     outside this container (see .story__image--full). Geometry vars
-     (--story-measure / --story-aside / --story-col-gap) live on
-     .story above. */
-  .story__flow {
+  /* --- Body section — node 1679:3292 ------------------------------
+     A 235px margin-note gutter, a 477px reading measure, another 235px
+     gutter, 57px between them. Only the measure is in normal flow
+     (centred in the section); each note is absolutely placed into a
+     gutter, anchored to the top of its row. */
+  .story__section {
+    --note-w: 235px;
+    --note-gap: 57px;
+    --measure: 477px;
+    padding: 72px var(--strip);
+    border-bottom: 1px solid var(--grey-1);
+  }
+  .story__section-body {
+    max-width: var(--measure);
+    margin: 0 auto;
+  }
+
+  .story__row {
     position: relative;
-    padding-left: var(--strip);
-    /* content box is exactly measure + gap + aside wide, so a right
-       float lands flush in the gutter and text keeps its measure */
-    max-width: calc(
-      var(--strip) + var(--story-measure) + var(--story-col-gap) +
-        var(--story-aside)
-    );
   }
-  .story__flow > * {
-    min-width: 0;
-    max-width: var(--story-measure);
-  }
-  .story__flow > * + * {
-    margin-top: 24px;
-  }
-  .story__aside {
-    float: right;
-    clear: right;
-    width: var(--story-aside);
-    /* lift it to sit level with the section label it annotates */
-    margin-top: -24px;
-    margin-bottom: 8px;
-    max-width: none;
-    font-family: var(--face-mono);
-    font-style: italic;
-    font-size: 14px;
-    line-height: 1.5;
-    letter-spacing: -0.02em;
-    color: var(--black);
-  }
-  /* the rule — only on runs with a margin note */
-  .story__flow:has(.story__aside)::before {
-    content: "";
-    position: absolute;
-    top: 4px;
-    bottom: 4px;
-    left: calc(
-      var(--strip) + var(--story-measure) + (var(--story-col-gap) / 2)
-    );
-    width: 1px;
-    background: var(--grey-1);
-  }
+  /* Vertical rhythm (Figma): 24px between blocks, 16px within a run of
+     paragraphs / before a list, 56px of breathing before a heading,
+     32px around an image. */
+  .story__row + .story__row { margin-top: 24px; }
+  .story__row--paragraph + .story__row--paragraph,
+  .story__row--paragraph + .story__row--list,
+  .story__row--paragraph + .story__row--numbered { margin-top: 16px; }
+  .story__row + .story__row--heading { margin-top: 56px; }
+  .story__row + .story__row--image { margin-top: 32px; }
+  .story__row--image + .story__row { margin-top: 32px; }
+  .story__section-body > .story__row:first-child { margin-top: 0; }
 
   .story__heading {
     font-family: var(--face-mono);
@@ -456,89 +472,190 @@ const segments = [];
     color: var(--main);
   }
   .story__paragraph {
+    font-family: var(--face-sans);
     font-size: 18px;
     line-height: 1.5;
     letter-spacing: -0.02em;
     color: #333;
   }
-  /* The principle statements read as plain paragraphs in the mockup —
-     no bullets, just paragraph spacing. */
   .story__list {
+    font-family: var(--face-sans);
     font-size: 18px;
     line-height: 1.5;
     letter-spacing: -0.02em;
-    color: #333;
-    list-style: none;
-    padding-left: 0;
+    color: var(--black);
   }
-  .story__list li + li {
+  /* One <p> per item — a paragraph-sized gap between them. */
+  .story__list p + p {
     margin-top: 16px;
   }
-
-  .story__image--enclosed {
-    max-width: var(--story-measure);
+  /* :global — <strong>/<a> here come from inline() via set:html, so
+     they carry no scoped-style attribute of their own. */
+  .story__paragraph :global(strong),
+  .story__list :global(strong) {
+    font-weight: 500;
   }
-  .story__image--enclosed img {
+  .story__paragraph :global(a),
+  .story__list :global(a) {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  /* Enclosed image — inline in the measure, cropped to a consistent
+     ratio regardless of source dimensions. */
+  .story__image {
+    /* --img-width is set inline per-block (see width in
+       content.config.ts); default 100% keeps it flush with the
+       measure. Negative margin centers any overhang evenly. */
+    --img-width: 100%;
+    width: var(--img-width);
+    margin-left: calc((100% - var(--img-width)) / 2);
+  }
+  .story__image img {
     display: block;
     width: 100%;
     aspect-ratio: 1840 / 1035;
     height: auto;
     object-fit: cover;
-    opacity: 0.8;
+    border-radius: 8px;
+  }
+  /* Desktop: the caption rides in the cursor-tracking .shot-tip on
+     hover (see the script + .shot-tip rule); this element is just its
+     data source. It comes back as a static caption under the image in
+     the narrow layout. */
+  .story__image-caption {
+    display: none;
   }
 
-  /* Full-width screenshots. The blush card + inner padding is part of
-     each PNG (image-*-full.png), so this only sizes, rounds and insets
-     them — no background/padding of our own. */
+  /* Margin notes — flush-right in the left gutter, flush-left in the
+     right gutter, both 57px clear of the measure. */
+  .story__note {
+    position: absolute;
+    /* Nudge down so the note's first-line baseline sits on the body
+       text's first baseline: the 14px/1.5 note and the 18px/1.5 body
+       have different first-baseline offsets (~4.5px apart). */
+    top: 4px;
+    width: var(--note-w);
+    margin: 0;
+    font-family: var(--face-mono);
+    font-style: italic;
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+    color: var(--black);
+  }
+  .story__note--left {
+    right: calc(100% + var(--note-gap));
+    text-align: right;
+  }
+  .story__note--right {
+    left: calc(100% + var(--note-gap));
+  }
+
+  /* --- Screenshots — nodes 1679:3334-8 --------------------------
+     Full-width, inset 72px each side, native 16:9, a standard gap
+     between consecutive ones. The mat / rounded card / shadow are
+     part of each PNG. */
+  .story__shots {
+    padding: 72px var(--strip) 96px;
+  }
   .story__shot {
     margin: 0;
-    padding: 0 var(--strip);
+  }
+  .story__shot + .story__shot {
+    margin-top: 32px;
   }
   .story__shot img {
     display: block;
     width: 100%;
+    aspect-ratio: 2048 / 1152;
     height: auto;
-    border-radius: 16px;
+    object-fit: cover;
+  }
+  /* Desktop: the caption rides in the cursor-tracking .shot-tip below;
+     this element is just its data source. It comes back as a static
+     caption under the image in the narrow layout. */
+  .story__shot-caption {
+    display: none;
+  }
+  /* Same treatment as the stories table's "Soon" caption
+     (.table__soon in index.astro) and the action-rail tips — mono,
+     black, no card; just wraps and clamps to the viewport since it's a
+     sentence, not a word. */
+  .shot-tip {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 60;
+    max-width: 300px;
+    margin: 0;
+    font-family: var(--face-mono);
+    font-size: var(--size-caption);
+    line-height: var(--leading-mast);
+    letter-spacing: var(--track-mast);
+    color: var(--black);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease;
+    transform: translate3d(var(--tip-x, 0), var(--tip-y, 0), 0);
+  }
+  .shot-tip.is-visible {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .shot-tip { display: none; }
   }
 
   @media (max-width: 1024px) {
-    .story__pad {
-      padding-left: 32px;
-      padding-right: 48px;
-    }
-    .story__content {
-      padding-left: 0;
-    }
     .strip,
     .story-peek,
     .story-actions {
       display: none;
     }
-    /* One column — the margin note folds back into the flow as an
-       indented aside, and the mat band loses its wide side padding. */
-    .story__flow {
-      display: block;
-      max-width: none;
-      padding-left: 32px;
-      padding-right: 48px;
+    .story__content {
+      padding-left: 0;
     }
-    .story__flow > *,
-    .story__flow > * + * {
+    .story__hero {
+      padding: 64px 32px 48px;
+    }
+    .story__section {
+      padding: 48px 32px;
+    }
+    .story__section-body {
       max-width: 601px;
     }
-    .story__flow:has(.story__aside)::before {
-      display: none;
+    /* No gutter to bleed into once the margin notes fold into the
+       flow — keep enclosed images flush with the measure. !important
+       because --img-width is also set inline per-block. */
+    .story__image {
+      --img-width: 100% !important;
     }
-    .story__aside {
-      float: none;
+    .story__shots {
+      padding: 48px 32px 64px;
+    }
+    /* No cursor tooltips on touch / narrow — the caption returns as
+       static text under each image. */
+    .story__image-caption,
+    .story__shot-caption {
+      display: block;
+      margin: 12px 0 0;
+      font-family: var(--face-mono);
+      font-size: var(--size-caption);
+      line-height: var(--leading-mast);
+      letter-spacing: var(--track-mast);
+      color: var(--grey-3);
+    }
+    /* Gutters collapse — the note folds back into the flow as an
+       indented aside just above the block it annotated. */
+    .story__note {
+      position: static;
       width: auto;
       max-width: 601px;
-      margin: 20px 0;
+      margin: 0 0 16px;
       padding-left: 16px;
       border-left: 2px solid var(--main);
-    }
-    .story__shot {
-      padding: 0;
+      text-align: left;
     }
   }
 </style>
