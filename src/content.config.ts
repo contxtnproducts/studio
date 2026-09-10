@@ -17,10 +17,16 @@ const shared = z.object({
 // instead of silently rendering wrong). "variant" on image is
 // deliberately explicit rather than inferred from position (e.g. "the
 // first image is enclosed") — the block itself should say what it is.
+// Rendered by the one story layout — src/pages/stories/[slug].astro and
+// its mirror inside index.astro's story modal.
 const block = z.discriminatedUnion('type', [
   z.object({ type: z.literal('heading'), text: z.string() }),
   z.object({ type: z.literal('paragraph'), text: z.string() }),
   z.object({ type: z.literal('list'), items: z.array(z.string()) }),
+  // Same shape as `list`, but rendered as an enumerated run with
+  // circled-number markers (① ② ③ … — see circled() in
+  // src/lib/format.ts; past ⑳ it falls back to a plain "21.").
+  z.object({ type: z.literal('numbered'), items: z.array(z.string()) }),
   z.object({
     type: z.literal('image'),
     src: z.string(),
@@ -30,6 +36,10 @@ const block = z.discriminatedUnion('type', [
     // the content edges. In the spread layout full/bleed each become a
     // standalone section (which also ends the two-column run before
     // them); outside it, full and bleed look the same.
+    // enclosed = sits inline in the reading measure; full / bleed = peel
+    // out of the body into the stacked full-width "shots" section after
+    // it. full and bleed currently render the same — bleed is kept as a
+    // distinct intent for when a shot should push past the 72px inset.
     variant: z.enum(['enclosed', 'full', 'bleed']),
     caption: z.string().optional(),
     // Enclosed-only: render wider than the text measure (e.g. 130 for
@@ -44,15 +54,13 @@ const block = z.discriminatedUnion('type', [
   // A margin note beside the body column. `side` picks the gutter
   // (Figma "Desktop - 44" has notes in both the left and right
   // margins); left-side notes are set flush-right against the column.
+  // A `quote` attaches as the margin note of the NEXT body block; a
+  // trailing one rides the last block.
   z.object({
     type: z.literal('quote'),
     text: z.string(),
     side: z.enum(['left', 'right']).default('right'),
   }),
-  // Manual section break for the spread layout — ends the current
-  // two-column section and starts a fresh one below it. A no-op in the
-  // single-column layouts.
-  z.object({ type: z.literal('break') }),
 ]);
 
 const work = defineCollection({
@@ -78,10 +86,6 @@ const work = defineCollection({
     context: z.string().optional(),
     stage: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    // Detail-view layout in the story modal: "flow" (default single
-    // column) or "spread" (magazine-style stack of two-column sections
-    // — an experiment; see .story-modal__body--spread in index.astro).
-    layout: z.enum(["flow", "spread"]).default("flow"),
     blocks: z.array(block).default([]),
   }),
 });

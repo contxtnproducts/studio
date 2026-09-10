@@ -40,7 +40,8 @@
   --size-hero:      2.375rem;  /* 38px — story-detail titles (modal + [slug]), mono */
   --size-story:     1.5rem;    /* 24px — stories table titles */
   --size-foot:      1rem;      /* 16px, flat */
-  --size-mast:      0.875rem;  /* 14px — pills, body-minor, captions */
+  --size-mast:      0.875rem;  /* 14px — pills, body-minor */
+  --size-caption:   0.75rem;   /* 12px — image captions + cursor-tracking hover tip */
   --size-label:     1rem;      /* 16px — section labels, about titles */
   --size-num:       1rem;      /* 16px — stories row number (mono) */
 
