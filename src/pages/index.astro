@@ -227,29 +227,46 @@ const detailStories = [
         ["Stage", stage],
         ["Tags", tags?.join(" ; ")],
       ].filter(([, value]) => value);
-      // A `quote` attaches as the margin note of the next body block; a
-      // trailing quote rides the last row. `enclosed` images are their
-      // own row inline in the measure; `full`/`bleed` peel off into
-      // `shots` — the stacked full-width section after the body.
-      const rows = [];
-      const shots = [];
-      let pendingNote = null;
-      for (const block of blocks) {
-        if (block.type === "quote") { pendingNote = block; continue; }
-        if (block.type === "image") {
-          if (block.variant === "enclosed") {
-            rows.push({ block, note: pendingNote });
+      // Sections in source order (mirrors the grouping in
+      // src/pages/stories/[slug].astro): a "body" section is a run of
+      // heading/paragraph/list/numbered/enclosed-image blocks, each a
+      // `row` with an optional margin note (a `quote` attaches as the
+      // note of the next row; a trailing quote rides the last one); a
+      // `full`/`bleed` image starts a "shots" section right where it
+      // sits in `blocks`, so a full image can break the flow instead of
+      // always trailing the whole story.
+      const sections = [];
+      {
+        let rows = [];
+        let shots = [];
+        let pendingNote = null;
+        const flushRows = () => {
+          if (pendingNote && rows.length) {
+            rows[rows.length - 1].note = pendingNote;
             pendingNote = null;
-          } else {
-            shots.push(block);
           }
-          continue;
+          if (rows.length) sections.push({ kind: "body", rows });
+          rows = [];
+        };
+        const flushShots = () => {
+          if (shots.length) sections.push({ kind: "shots", shots });
+          shots = [];
+        };
+        for (const block of blocks) {
+          if (block.type === "quote") { pendingNote = block; continue; }
+          if (block.type === "image" && block.variant !== "enclosed") {
+            flushRows();
+            shots.push(block);
+            continue;
+          }
+          flushShots();
+          rows.push({ block, note: pendingNote });
+          pendingNote = null;
         }
-        rows.push({ block, note: pendingNote });
-        pendingNote = null;
+        flushRows();
+        flushShots();
       }
-      if (pendingNote && rows.length) rows[rows.length - 1].note = pendingNote;
-      return { slug: s.id, rows, shots, story: { title, attributes } };
+      return { slug: s.id, sections, story: { title, attributes } };
     }),
   ...moreDetails,
 ];
@@ -267,7 +284,7 @@ const about = [
     role: "Founding Product Designer",
     org: "ReliON",
     url: RELION_URL,
-    stats: "EV charging infrastructure · 1,000+ stations",
+    stats: "EV charging infrastructure · 12,000+ stations",
     slug: "relion",
   },
   {
@@ -697,67 +714,72 @@ const testimonials = [
                   </dl>
                 )}
               </header>
-              {/* Body section — Figma node 1679:3292. Centred 477px
-                 measure with a 235px margin-note gutter each side (57px
-                 clear); notes are absolutely placed and anchor to the top
-                 of their row. Mirrors .story__section in
-                 src/pages/stories/[slug].astro. */}
-              {s.rows.length > 0 && (
-                <section class="story-modal__section-next">
-                  <div class="story-modal__sn-body">
-                    {s.rows.map((row) => (
-                      <div class={`story-modal__sn-row story-modal__sn-row--${row.block.type}`}>
-                        {row.note && (
-                          <p class={`story-modal__sn-note story-modal__sn-note--${row.note.side}`}>{row.note.text}</p>
-                        )}
-                        {row.block.type === "heading" && (
-                          <p class="story-modal__sn-heading">{row.block.text}</p>
-                        )}
-                        {row.block.type === "paragraph" && (
-                          <p class="story-modal__sn-para" set:html={inline(row.block.text)} />
-                        )}
-                        {row.block.type === "list" && (
-                          <div class="story-modal__sn-list">
-                            {row.block.items.map((item) => (
-                              <p set:html={`→ ${inline(item)}`} />
-                            ))}
-                          </div>
-                        )}
-                        {row.block.type === "numbered" && (
-                          <div class="story-modal__sn-list">
-                            {row.block.items.map((item, j) => (
-                              <p set:html={`${circled(j + 1)} ${inline(item)}`} />
-                            ))}
-                          </div>
-                        )}
-                        {row.block.type === "image" && (
-                          <figure
-                            class="story-modal__sn-image"
-                            style={row.block.width ? `--img-width:${row.block.width}%` : undefined}
-                          >
-                            <img src={row.block.src} alt={row.block.alt} loading="lazy" />
-                            {row.block.caption && (
-                              <figcaption class="story-modal__sn-image-caption">{row.block.caption}</figcaption>
-                            )}
-                          </figure>
-                        )}
-                      </div>
+              {/* Sections, in source order — a full/bleed image starts a
+                 shots section right where it sits, so it can break the
+                 flow between two body sections instead of always
+                 trailing the story. Mirrors src/pages/stories/[slug].astro. */}
+              {s.sections.map((section) =>
+                section.kind === "body" ? (
+                  // Body section — Figma node 1679:3292. Centred 477px
+                  // measure with a 235px margin-note gutter each side
+                  // (57px clear); notes are absolutely placed and anchor
+                  // to the top of their row.
+                  <section class="story-modal__section-next">
+                    <div class="story-modal__sn-body">
+                      {section.rows.map((row) => (
+                        <div class={`story-modal__sn-row story-modal__sn-row--${row.block.type}`}>
+                          {row.note && (
+                            <p class={`story-modal__sn-note story-modal__sn-note--${row.note.side}`}>{row.note.text}</p>
+                          )}
+                          {row.block.type === "heading" && (
+                            <p class="story-modal__sn-heading">{row.block.text}</p>
+                          )}
+                          {row.block.type === "paragraph" && (
+                            <p class="story-modal__sn-para" set:html={inline(row.block.text)} />
+                          )}
+                          {row.block.type === "list" && (
+                            <div class="story-modal__sn-list">
+                              {row.block.items.map((item) => (
+                                <p set:html={`→ ${inline(item)}`} />
+                              ))}
+                            </div>
+                          )}
+                          {row.block.type === "numbered" && (
+                            <div class="story-modal__sn-list">
+                              {row.block.items.map((item, j) => (
+                                <p set:html={`${circled(j + 1)} ${inline(item)}`} />
+                              ))}
+                            </div>
+                          )}
+                          {row.block.type === "image" && (
+                            <figure
+                              class="story-modal__sn-image"
+                              style={row.block.width ? `--img-width:${row.block.width}%` : undefined}
+                            >
+                              <img src={row.block.src} alt={row.block.alt} loading="lazy" />
+                              {row.block.caption && (
+                                <figcaption class="story-modal__sn-image-caption">{row.block.caption}</figcaption>
+                              )}
+                            </figure>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : (
+                  // Screenshots — nodes 1679:3334-8. Full-width, inset
+                  // 72px each side, a standard gap between consecutive
+                  // ones, native 16:9. Mirrors .story__shots in the
+                  // standalone.
+                  <section class="story-modal__sn-shots">
+                    {section.shots.map((shot) => (
+                      <figure class="story-modal__sn-shot">
+                        <img src={shot.src} alt={shot.alt} loading="lazy" />
+                        {shot.caption && <figcaption class="story-modal__sn-shot-caption">{shot.caption}</figcaption>}
+                      </figure>
                     ))}
-                  </div>
-                </section>
-              )}
-              {/* Screenshots — nodes 1679:3334-8. Full-width, inset 72px
-                 each side, a standard gap between consecutive ones,
-                 native 16:9. Mirrors .story__shots in the standalone. */}
-              {s.shots.length > 0 && (
-                <section class="story-modal__sn-shots">
-                  {s.shots.map((shot) => (
-                    <figure class="story-modal__sn-shot">
-                      <img src={shot.src} alt={shot.alt} loading="lazy" />
-                      {shot.caption && <figcaption class="story-modal__sn-shot-caption">{shot.caption}</figcaption>}
-                    </figure>
-                  ))}
-                </section>
+                  </section>
+                )
               )}
             </>
           ) : (
@@ -1188,18 +1210,19 @@ const testimonials = [
       const triggers = document.querySelectorAll("[data-open-story]");
       if (triggers.length === 0 || bodies.length === 0) return;
 
-      // Every story with a detail payload, in the same order they're
-      // defined in — what the next-story action and its ↻-wraparound
-      // cycle through. The gallery-only "archive" body is a valid
-      // destination of Next (you can land on it from a story) but not a
-      // source: goNext() bails there and its button is hidden (see
-      // syncNav) so the archive reads as the end of the rotation.
+      // Every detail body, in definition order. `gallerySlugs` is the
+      // gallery-only "archive" (the mockups grid) — reachable by opening
+      // it directly (the hero link), but kept out of the Next/Prev
+      // rotation entirely: from the last story, Next wraps back to the
+      // first. `rotationSlugs` is what goNext()/goPrev() cycle through.
       const storySlugs = Array.from(bodies).map((b) => b.dataset.story);
       const gallerySlugs = Array.from(bodies)
         .filter((b) => b.classList.contains("story-modal__body--gallery"))
         .map((b) => b.dataset.story);
+      const rotationSlugs = storySlugs.filter((s) => !gallerySlugs.includes(s));
       const nextBtn = document.getElementById("story-next");
       function syncNav(slug) {
+        // No Next out of the archive — it's not part of the story flow.
         if (nextBtn) nextBtn.hidden = gallerySlugs.includes(slug);
       }
 
@@ -1301,18 +1324,19 @@ const testimonials = [
       }
 
       function goNext() {
-        if (!currentSlug || storySlugs.length === 0) return;
-        // No "next" out of the gallery archive — it's the end of the line.
-        if (gallerySlugs.includes(currentSlug)) return;
-        const idx = storySlugs.indexOf(currentSlug);
-        switchStory(storySlugs[(idx + 1) % storySlugs.length], 1);
+        if (!currentSlug || rotationSlugs.length === 0) return;
+        const idx = rotationSlugs.indexOf(currentSlug);
+        // Not in the rotation (the archive, opened directly) — no next.
+        if (idx === -1) return;
+        switchStory(rotationSlugs[(idx + 1) % rotationSlugs.length], 1);
       }
 
       // Previous story — keyboard-only (←), no button in the rail.
       function goPrev() {
-        if (!currentSlug || storySlugs.length === 0) return;
-        const idx = storySlugs.indexOf(currentSlug);
-        switchStory(storySlugs[(idx - 1 + storySlugs.length) % storySlugs.length], -1);
+        if (!currentSlug || rotationSlugs.length === 0) return;
+        const idx = rotationSlugs.indexOf(currentSlug);
+        if (idx === -1) return;
+        switchStory(rotationSlugs[(idx - 1 + rotationSlugs.length) % rotationSlugs.length], -1);
       }
 
       // Copy-to-clipboard for the currently open story, same
@@ -2245,13 +2269,22 @@ const testimonials = [
 
   /* Screenshots — nodes 1679:3334-8 (mirror of .story__shots in
      src/pages/stories/[slug].astro). Full-bleed like the body
-     section, then inset 72px each side; stacked flush, native 16:9.
-     The mat / rounded card / shadow are part of each PNG. */
+     section, then inset 72px each side; a standard gap between
+     consecutive ones. Each renders at its own proportions (the mat /
+     rounded card / shadow are part of each PNG). */
   .story-modal__sn-shots {
     box-sizing: border-box;
     width: calc(100% + var(--strip) + var(--strip) * 1.5);
     margin-left: calc(-1 * var(--strip));
     padding: 72px var(--strip) 96px;
+    border-bottom: 1px solid var(--grey-1);
+  }
+  /* A shots section can now land mid-story (see the sections grouping
+     in the frontmatter) rather than always trailing the body, so the
+     trailing hairline has to live on whichever section actually ends
+     the panel — body or shots — not hardcoded onto one of them. */
+  .story-modal__body--next > :last-child {
+    border-bottom: none;
   }
   .story-modal__sn-shot {
     margin: 0;
@@ -2262,9 +2295,7 @@ const testimonials = [
   .story-modal__sn-shot img {
     display: block;
     width: 100%;
-    aspect-ratio: 2048 / 1152;
     height: auto;
-    object-fit: cover;
   }
   /* Desktop: the caption rides in the cursor-tracking .shot-tip below;
      this element is just its data source. Returns as a static caption
@@ -2405,7 +2436,9 @@ const testimonials = [
     display: flex;
     flex-wrap: wrap;
     gap: 24px;
-    padding: 40px 0;
+    /* No top padding: .intro's --content-top alone sets the gap
+       above, so the pills sit as far from the top as from the left. */
+    padding: 0 0 40px;
   }
   .pill {
     border: 1px solid var(--grey-1);
@@ -2441,7 +2474,7 @@ const testimonials = [
   }
   /* Shares .masthead's sticky containing-block duty — see the markup
      comment on .intro for why this wrapper exists. --content-top
-     (172px) is the card-top → cartouches gap; --lede-top (8px) is the
+     (== --pad-x) is the card-top → cartouches gap; --lede-top (8px) is the
      cartouches → hero gap; 56px under the hero before the first .sep. */
   .intro {
     display: flex;

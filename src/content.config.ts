@@ -31,15 +31,13 @@ const block = z.discriminatedUnion('type', [
     type: z.literal('image'),
     src: z.string(),
     alt: z.string(),
-    // enclosed = sits in the column flow; full = its own full-width
-    // section at content width; bleed = its own section, pushed past
-    // the content edges. In the spread layout full/bleed each become a
-    // standalone section (which also ends the two-column run before
-    // them); outside it, full and bleed look the same.
-    // enclosed = sits inline in the reading measure; full / bleed = peel
-    // out of the body into the stacked full-width "shots" section after
-    // it. full and bleed currently render the same — bleed is kept as a
-    // distinct intent for when a shot should push past the 72px inset.
+    // enclosed = sits inline in the reading measure; full / bleed peel
+    // out into their own full-width "shots" section right at that point
+    // in the block order — so a run of body blocks, then a shots
+    // section, then more body blocks is one story, not enclosed images
+    // in the flow with every full/bleed image forced to the end. full
+    // and bleed currently render the same; bleed is kept as a distinct
+    // intent for when a shot should push past the 72px inset.
     variant: z.enum(['enclosed', 'full', 'bleed']),
     caption: z.string().optional(),
     // Enclosed-only: render wider than the text measure (e.g. 130 for

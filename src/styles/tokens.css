@@ -56,7 +56,7 @@
 
   /* --- Layout --------------------------------------------------
      1440 frame: 72px margin strip, then the content column filling
-     the rest (1368px). 172px from the card top to the cartouches,
+     the rest (1368px). card top → cartouches equals --pad-x,
      cartouches → hero gap 8px, then a 1px rule between every section.
      --section-y is the single vertical breathing value used top and
      bottom of every section AND under the hero, so every gap across a
@@ -70,7 +70,7 @@
   --section-y:  73px;     /* section inner padding, top/bottom (+ under the hero).
                              ~18% over the 62px Figma value — the mathematically
                              equal gaps read a touch tight next to the text blocks. */
-  --content-top: 172px;   /* card top → cartouches */
+  --content-top: var(--pad-x); /* card top → cartouches; equals the left margin */
   --lede-top:   8px;      /* cartouches → hero */
   --pad-bottom: 96px;     /* story-modal / [slug] bottom padding */
 
@@ -95,6 +95,5 @@
 
     --pad-x:       clamp(28px, 5vw, 72px);
     --section-y:   clamp(44px, 5.069vw, 73px);
-    --content-top: clamp(72px, 11.944vw, 172px);
   }
 }

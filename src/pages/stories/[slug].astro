@@ -33,34 +33,48 @@ const attributes = [
   ["Tags", tags?.join(" , ")],
 ].filter(([, value]) => value);
 
-// Group the running-text blocks into rows: each row is one body block
-// (heading / paragraph / list / numbered / enclosed image) with an
-// optional margin note. A `quote` block attaches as the note of the
-// NEXT body block (it anchors to that row's top); a trailing quote
-// rides on the last row. `full`/`bleed` images peel off into `shots`
-// — their own stacked section after the body (Figma nodes 1679:3334-8).
-const rows = [];
-const shots = [];
+// Group the block list into sections IN SOURCE ORDER: a "body" section
+// is a run of heading/paragraph/list/numbered/enclosed-image blocks,
+// each becoming a `row` with an optional margin note (a `quote`
+// attaches as the note of the NEXT row; a trailing quote rides the
+// last one); a `full`/`bleed` image starts a "shots" section instead
+// of just tacking onto the end — so the story can read
+// body-section → shots-section → body-section, a full image breaking
+// the flow wherever it actually sits in `blocks`, not always trailing
+// the whole story (Figma nodes 1679:3334-8 for the shots themselves).
+const sections = [];
 {
+  let rows = [];
+  let shots = [];
   let pendingNote = null;
+  const flushRows = () => {
+    if (pendingNote && rows.length) {
+      rows[rows.length - 1].note = pendingNote;
+      pendingNote = null;
+    }
+    if (rows.length) sections.push({ kind: "body", rows });
+    rows = [];
+  };
+  const flushShots = () => {
+    if (shots.length) sections.push({ kind: "shots", shots });
+    shots = [];
+  };
   for (const block of blocks) {
     if (block.type === "quote") {
       pendingNote = block;
       continue;
     }
-    if (block.type === "image") {
-      if (block.variant === "enclosed") {
-        rows.push({ block, note: pendingNote });
-        pendingNote = null;
-      } else {
-        shots.push(block);
-      }
+    if (block.type === "image" && block.variant !== "enclosed") {
+      flushRows();
+      shots.push(block);
       continue;
     }
+    flushShots();
     rows.push({ block, note: pendingNote });
     pendingNote = null;
   }
-  if (pendingNote && rows.length) rows[rows.length - 1].note = pendingNote;
+  flushRows();
+  flushShots();
 }
 ---
 
@@ -122,66 +136,66 @@ const shots = [];
         )}
       </header>
 
-      {rows.length > 0 && (
-        <!-- Body section — node 1679:3292. Centred 477px measure + a
-             235px margin-note gutter each side (57px clear); notes are
-             absolutely placed and anchor to the top of their row. -->
-        <section class="story__section">
-          <div class="story__section-body">
-            {rows.map((row) => (
-              <div class={`story__row story__row--${row.block.type}`}>
-                {row.note && (
-                  <p class={`story__note story__note--${row.note.side}`}>{row.note.text}</p>
-                )}
-                {row.block.type === "heading" && (
-                  <p class="story__heading">{row.block.text}</p>
-                )}
-                {row.block.type === "paragraph" && (
-                  <p class="story__paragraph" set:html={inline(row.block.text)} />
-                )}
-                {row.block.type === "list" && (
-                  <div class="story__list">
-                    {row.block.items.map((item) => (
-                      <p set:html={`→ ${inline(item)}`} />
-                    ))}
-                  </div>
-                )}
-                {row.block.type === "numbered" && (
-                  <div class="story__list">
-                    {row.block.items.map((item, j) => (
-                      <p set:html={`${circled(j + 1)} ${inline(item)}`} />
-                    ))}
-                  </div>
-                )}
-                {row.block.type === "image" && (
-                  <figure
-                    class="story__image"
-                    style={row.block.width ? `--img-width:${row.block.width}%` : undefined}
-                  >
-                    <img src={row.block.src} alt={row.block.alt} loading="lazy" />
-                    {row.block.caption && (
-                      <figcaption class="story__image-caption">{row.block.caption}</figcaption>
-                    )}
-                  </figure>
-                )}
-              </div>
+      {sections.map((section) =>
+        section.kind === "body" ? (
+          <!-- Body section — node 1679:3292. Centred 477px measure + a
+               235px margin-note gutter each side (57px clear); notes are
+               absolutely placed and anchor to the top of their row. -->
+          <section class="story__section">
+            <div class="story__section-body">
+              {section.rows.map((row) => (
+                <div class={`story__row story__row--${row.block.type}`}>
+                  {row.note && (
+                    <p class={`story__note story__note--${row.note.side}`}>{row.note.text}</p>
+                  )}
+                  {row.block.type === "heading" && (
+                    <p class="story__heading">{row.block.text}</p>
+                  )}
+                  {row.block.type === "paragraph" && (
+                    <p class="story__paragraph" set:html={inline(row.block.text)} />
+                  )}
+                  {row.block.type === "list" && (
+                    <div class="story__list">
+                      {row.block.items.map((item) => (
+                        <p set:html={`→ ${inline(item)}`} />
+                      ))}
+                    </div>
+                  )}
+                  {row.block.type === "numbered" && (
+                    <div class="story__list">
+                      {row.block.items.map((item, j) => (
+                        <p set:html={`${circled(j + 1)} ${inline(item)}`} />
+                      ))}
+                    </div>
+                  )}
+                  {row.block.type === "image" && (
+                    <figure
+                      class="story__image"
+                      style={row.block.width ? `--img-width:${row.block.width}%` : undefined}
+                    >
+                      <img src={row.block.src} alt={row.block.alt} loading="lazy" />
+                      {row.block.caption && (
+                        <figcaption class="story__image-caption">{row.block.caption}</figcaption>
+                      )}
+                    </figure>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <!-- Screenshots — nodes 1679:3334-8. Full-width, inset 72px each
+               side, native 16:9, a standard gap between consecutive ones.
+               The mat + rounded card + shadow are baked into each PNG. -->
+          <section class="story__shots">
+            {section.shots.map((shot) => (
+              <figure class="story__shot">
+                <img src={shot.src} alt={shot.alt} loading="lazy" />
+                {shot.caption && <figcaption class="story__shot-caption">{shot.caption}</figcaption>}
+              </figure>
             ))}
-          </div>
-        </section>
-      )}
-
-      {shots.length > 0 && (
-        <!-- Screenshots — nodes 1679:3334-8. Full-width, inset 72px each
-             side, native 16:9, a standard gap between consecutive ones.
-             The mat + rounded card + shadow are baked into each PNG. -->
-        <section class="story__shots">
-          {shots.map((shot) => (
-            <figure class="story__shot">
-              <img src={shot.src} alt={shot.alt} loading="lazy" />
-              {shot.caption && <figcaption class="story__shot-caption">{shot.caption}</figcaption>}
-            </figure>
-          ))}
-        </section>
+          </section>
+        )
       )}
     </article>
   </div>
@@ -554,11 +568,19 @@ const shots = [];
   }
 
   /* --- Screenshots — nodes 1679:3334-8 --------------------------
-     Full-width, inset 72px each side, native 16:9, a standard gap
-     between consecutive ones. The mat / rounded card / shadow are
-     part of each PNG. */
+     Full-width, inset 72px each side, a standard gap between
+     consecutive ones. Each renders at its own proportions (the mat /
+     rounded card / shadow are part of each PNG). */
   .story__shots {
     padding: 72px var(--strip) 96px;
+    border-bottom: 1px solid var(--grey-1);
+  }
+  /* A shots section can now land mid-story (see the sections grouping
+     above) rather than always trailing the body, so the trailing-hairline
+     rule has to live on whichever section actually ends the page —
+     body or shots — not hardcoded onto one of them. */
+  .story__content > :last-child {
+    border-bottom: none;
   }
   .story__shot {
     margin: 0;
@@ -569,9 +591,7 @@ const shots = [];
   .story__shot img {
     display: block;
     width: 100%;
-    aspect-ratio: 2048 / 1152;
     height: auto;
-    object-fit: cover;
   }
   /* Desktop: the caption rides in the cursor-tracking .shot-tip below;
      this element is just its data source. It comes back as a static
